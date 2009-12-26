@@ -34,14 +34,12 @@
 #define MIN_EXTENT (4 << 11)  /* sectors */
 
 /* Command-line options */
-const char *device_name;
 unsigned minsize = 4;  /* MiB */
 gboolean quiet;
 gboolean verbose;
 gboolean dry_run;
 
 static const GOptionEntry options[] = {
-	{"name", 'n', 0, G_OPTION_ARG_STRING, &device_name, "Name for new device-mapper node", "NAME"},
 	{"min", 'm', 0, G_OPTION_ARG_INT, &minsize, "Minimum size for new device", "MiB"},
 	{"test", 't', 0, G_OPTION_ARG_NONE, &dry_run, "Do everything except create the device", NULL},
 	{"quiet", 'q', 0, G_OPTION_ARG_NONE, &quiet, "Suppress summary information", NULL},
@@ -399,18 +397,20 @@ int main(int argc, char **argv)
 {
 	GOptionContext *opt_ctx;
 	GError *err = NULL;
+	const char *device_name;
 
-	opt_ctx = g_option_context_new("- Collect free disk space into a DM "
-				"node");
+	opt_ctx = g_option_context_new("NODE - Collect free disk space "
+				"into a DM node");
 	g_option_context_add_main_entries(opt_ctx, options, NULL);
 	if (!g_option_context_parse(opt_ctx, &argc, &argv, &err))
 		die("%s", err->message);
 	g_option_context_free(opt_ctx);
 
-	if (argc > 1)
+	if (argc < 2)
+		die("You must specify a device name.");
+	if (argc > 2)
 		die("Found extra arguments.");
-	if (device_name == NULL)
-		die("You must specify --name.");
+	device_name = argv[1];
 
 	if (geteuid() != 0)
 		die("You must be root.");
