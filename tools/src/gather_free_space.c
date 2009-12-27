@@ -90,6 +90,12 @@ static void _dm_log(int level, const char *file, int line, const char *fmt,
 
 /* blkid helpers */
 
+static int compare_device_names(const void *a, const void *b, void *data)
+{
+	(void) data;
+	return strcmp(a, b);
+}
+
 static const char *blkid_dev_get_value(blkid_dev dev, const char *tag)
 {
 	blkid_tag_iterate iter;
@@ -106,6 +112,26 @@ static const char *blkid_dev_get_value(blkid_dev dev, const char *tag)
 	}
 	blkid_tag_iterate_end(iter);
 	return ret;
+}
+
+static void add_all_devices(blkid_cache cache, GTree *devices)
+{
+	blkid_dev_iterate iter;
+	blkid_dev dev;
+	const char *device;
+	const char *fstype;
+
+	if (blkid_probe_all(cache))
+		die("Couldn't probe devices");
+	iter = blkid_dev_iterate_begin(cache);
+	while (!blkid_dev_next(iter, &dev)) {
+		device = blkid_dev_devname(dev);
+		fstype = blkid_dev_get_value(dev, "TYPE");
+		if (fstype != NULL) 
+			g_tree_insert(devices, g_strdup(device),
+						g_strdup(fstype));
+	}
+	blkid_dev_iterate_end(iter);
 }
 
 /* dm helpers */
@@ -328,13 +354,17 @@ static const struct handler {
 	{NULL, NULL}
 };
 
-static void handle_one(const char *device, const char *fstype)
+static gboolean handle_one(void *_device, void *_fstype, void *data)
 {
+	const char *device = _device;
+	const char *fstype = _fstype;
 	const struct handler *hdlr;
 	const char *reason = NULL;
 	int flags;
 	uint64_t device_sectors;
 	uint64_t orig_sectors = used_sectors;
+
+	(void) data;
 
 	if (ext2fs_check_if_mounted(device, &flags))
 		die("Couldn't check mount status of %s", device);
@@ -346,12 +376,12 @@ static void handle_one(const char *device, const char *fstype)
 		reason = "busy";
 	if (reason != NULL) {
 		msg("%s is %s, skipping", device, reason);
-		return;
+		return FALSE;
 	}
 
 	if (ext2fs_get_device_size2(device, 512, &device_sectors)) {
 		msg("Couldn't query size of %s", device);
-		return;
+		return FALSE;
 	}
 
 	for (hdlr = handlers; hdlr->fstype != NULL; hdlr++) {
@@ -363,34 +393,11 @@ static void handle_one(const char *device, const char *fstype)
 						fstype, (used_sectors -
 						orig_sectors) >> 11,
 						device_sectors >> 11);
-			return;
+			return FALSE;
 		}
 	}
 	msg("%s: Unknown filesystem %s", device, fstype);
-}
-
-static void handle_all(void)
-{
-	blkid_cache cache;
-	blkid_dev_iterate dev_iter;
-	blkid_dev dev;
-	const char *fstype;
-
-	/* Avoid using a cache file, since we want to ensure we don't get
-	   stale data, and if we use a real cache file there's nothing in
-	   the API that allows us to detect/reject stale entries. */
-	if (blkid_get_cache(&cache, "/dev/null"))
-		die("Couldn't get blkid cache");
-	if (blkid_probe_all(cache))
-		die("Couldn't probe devices");
-	dev_iter = blkid_dev_iterate_begin(cache);
-	while (!blkid_dev_next(dev_iter, &dev)) {
-		fstype = blkid_dev_get_value(dev, "TYPE");
-		if (fstype != NULL)
-			handle_one(blkid_dev_devname(dev), fstype);
-	}
-	blkid_dev_iterate_end(dev_iter);
-	blkid_put_cache(cache);
+	return FALSE;
 }
 
 int main(int argc, char **argv)
@@ -398,6 +405,8 @@ int main(int argc, char **argv)
 	GOptionContext *opt_ctx;
 	GError *err = NULL;
 	const char *device_name;
+	blkid_cache blkid_cache;
+	GTree *devices;
 
 	opt_ctx = g_option_context_new("NODE - Collect free disk space "
 				"into a DM node");
@@ -424,7 +433,18 @@ int main(int argc, char **argv)
 	if (!dm_task_set_name(task, device_name))
 		die("Couldn't set device name");
 
-	handle_all();
+	devices = g_tree_new_full(compare_device_names, NULL, g_free,
+				g_free);
+	/* Avoid using a cache file, since we want to ensure we don't get
+	   stale data, and if we use a real cache file there's nothing in
+	   the API that allows us to detect/reject stale entries. */
+	if (blkid_get_cache(&blkid_cache, "/dev/null"))
+		die("Couldn't get blkid cache");
+	add_all_devices(blkid_cache, devices);
+	g_tree_foreach(devices, handle_one, NULL);
+	blkid_put_cache(blkid_cache);
+	g_tree_destroy(devices);
+
 	info("Total found: %llu MiB", used_sectors >> 11);
 	if (minsize && (used_sectors >> 11) < minsize)
 		die("Minimum size requirement not met, aborting");
