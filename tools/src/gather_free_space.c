@@ -1,5 +1,5 @@
 /*
- * gather_free_space - - Collect free disk space into a device-mapper node
+ * gather_free_space - Collect free disk space into a device-mapper node
  *
  * Copyright (C) 2009 Carnegie Mellon University
  *
@@ -86,7 +86,7 @@ static void _dm_log(int level, const char *file, int line, const char *fmt,
 	vfprintf(stderr, fmt, ap);
 	fprintf(stderr, "\n");
 	va_end(ap);
-}                           
+}
 
 /* blkid helpers */
 
