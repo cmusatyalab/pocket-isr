@@ -34,12 +34,14 @@
 #define MIN_EXTENT (4 << 11)  /* sectors */
 
 /* Command-line options */
+const char **exclude;
 unsigned minsize = 4;  /* MiB */
 gboolean quiet;
 gboolean verbose;
 gboolean dry_run;
 
 static const GOptionEntry options[] = {
+	{"exclude", 'x', 0, G_OPTION_ARG_STRING_ARRAY, &exclude, "Skip the specified device", "DEVICE"},
 	{"min", 'm', 0, G_OPTION_ARG_INT, &minsize, "Minimum size for new device", "MiB"},
 	{"test", 't', 0, G_OPTION_ARG_NONE, &dry_run, "Do everything except create the device", NULL},
 	{"quiet", 'q', 0, G_OPTION_ARG_NONE, &quiet, "Suppress summary information", NULL},
@@ -132,6 +134,24 @@ static void add_all_devices(blkid_cache cache, GTree *devices)
 						g_strdup(fstype));
 	}
 	blkid_dev_iterate_end(iter);
+}
+
+static void add_device(blkid_cache cache, GTree *devices, const char *device)
+{
+	blkid_dev dev;
+	const char *fstype;
+
+	dev = blkid_get_dev(cache, device, BLKID_DEV_NORMAL);
+	if (dev == NULL) {
+		msg("%s: Couldn't probe device", device);
+		return;
+	}
+	fstype = blkid_dev_get_value(dev, "TYPE");
+	if (fstype == NULL) {
+		msg("%s: Couldn't determine filesystem type", device);
+		return;
+	}
+	g_tree_insert(devices, g_strdup(device), g_strdup(fstype));
 }
 
 /* dm helpers */
@@ -408,8 +428,9 @@ int main(int argc, char **argv)
 	blkid_cache blkid_cache;
 	GTree *devices;
 
-	opt_ctx = g_option_context_new("NODE - Collect free disk space "
-				"into a DM node");
+	opt_ctx = g_option_context_new("NODE [DEVICE ...]");
+	g_option_context_set_summary(opt_ctx, "Collects free disk space "
+				"into a device-mapper node.");
 	g_option_context_add_main_entries(opt_ctx, options, NULL);
 	if (!g_option_context_parse(opt_ctx, &argc, &argv, &err))
 		die("%s", err->message);
@@ -417,9 +438,9 @@ int main(int argc, char **argv)
 
 	if (argc < 2)
 		die("You must specify a device name.");
-	if (argc > 2)
-		die("Found extra arguments.");
 	device_name = argv[1];
+	argc -= 2;
+	argv += 2;
 
 	if (geteuid() != 0)
 		die("You must be root.");
@@ -440,7 +461,14 @@ int main(int argc, char **argv)
 	   the API that allows us to detect/reject stale entries. */
 	if (blkid_get_cache(&blkid_cache, "/dev/null"))
 		die("Couldn't get blkid cache");
-	add_all_devices(blkid_cache, devices);
+	if (argc)
+		for (; argc; argc--, argv++)
+			add_device(blkid_cache, devices, *argv);
+	else
+		add_all_devices(blkid_cache, devices);
+	if (exclude != NULL)
+		for (; *exclude != NULL; exclude++)
+			g_tree_remove(devices, *exclude);
 	g_tree_foreach(devices, handle_one, NULL);
 	blkid_put_cache(blkid_cache);
 	g_tree_destroy(devices);
