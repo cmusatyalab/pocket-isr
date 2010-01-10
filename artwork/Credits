@@ -1,0 +1,9 @@
+standard:
+	Authors: Matt Toups <mtoups@cs.cmu.edu>
+		 Benjamin Gilbert <bgilbert@cs.cmu.edu>
+	Balloon: http://en.wikipedia.org/wiki/File:Eagle.moving.north.png
+	Background: constantine
+
+constantine:
+	Author: Máirín Duffy <duffy@fedoraproject.org>
+	bokeh: http://www.flickr.com/photos/yourbartender/49642451/
