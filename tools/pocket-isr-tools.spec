@@ -1,0 +1,48 @@
+Name:           pocket-isr-tools
+Version:        1.0
+Release:        1%{?dist}
+Summary:        Tools for Pocket ISR live image
+
+Group:          System Environment/Base
+License:        GPLv2
+URL:            http://isr.cmu.edu/
+Source0:        %{name}-%{version}.tar.gz
+BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
+
+BuildRequires:  glib2-devel device-mapper-devel libblkid-devel
+BuildRequires:  e2fsprogs-devel ntfsprogs-devel
+
+%description
+Tools for the Pocket ISR live image, including a utility to collect free
+disk space into a device-mapper volume and an initscript to create transient
+/home and swap partitions on free space during live image boot.
+
+%prep
+%setup -q
+
+%build
+%configure --enable-silent-rules
+make %{?_smp_mflags}
+
+%install
+rm -rf $RPM_BUILD_ROOT
+make install DESTDIR=$RPM_BUILD_ROOT
+
+%clean
+rm -rf $RPM_BUILD_ROOT
+
+%files
+%defattr(-,root,root,-)
+%doc COPYING
+%{_initddir}/early-scratch-setup
+%{_sbindir}/gather_free_space
+
+%post
+/sbin/chkconfig --add early-scratch-setup
+
+%preun
+/sbin/chkconfig --del early-scratch-setup
+
+%changelog
+* Sun Jan 10 2010 Benjamin Gilbert <bgilbert@cs.cmu.edu> - 1.0-1
+- Initial package
