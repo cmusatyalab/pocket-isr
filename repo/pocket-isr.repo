@@ -1,0 +1,23 @@
+[pocket-isr]
+name=Pocket ISR repository
+failovermethod=priority
+baseurl=http://isr.cmu.edu/software/pocket-isr/repo/$releasever/$basearch/
+enabled=1
+gpgcheck=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-pocket-isr
+
+[pocket-isr-debuginfo]
+name=Pocket ISR debuginfo repository
+failovermethod=priority
+baseurl=http://isr.cmu.edu/software/pocket-isr/repo/$releasever/$basearch/debug/
+enabled=0
+gpgcheck=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-pocket-isr
+
+[pocket-isr-source]
+name=Pocket ISR source packages
+failovermethod=priority
+baseurl=http://isr.cmu.edu/software/pocket-isr/repo/$releasever/SRPMS/
+enabled=0
+gpgcheck=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-pocket-isr
