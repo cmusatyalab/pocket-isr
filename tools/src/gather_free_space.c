@@ -1,7 +1,7 @@
 /*
  * gather_free_space - Collect free disk space into a device-mapper node
  *
- * Copyright (C) 2009 Carnegie Mellon University
+ * Copyright (C) 2009-2010 Carnegie Mellon University
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of version 2 of the GNU General Public License as published
@@ -250,6 +250,13 @@ static void handle_ntfs(const char *device, uint64_t sectors)
 	(void) sectors;
 
 	/* XXX ntfs logging? */
+
+	/* We ask for a forensic mount so that the volume header won't be
+	   updated.  That doesn't guarantee that the filesystem isn't
+	   changed at all; we'd also need NTFS_MNT_RDONLY for that.  However,
+	   we don't use that flag so that ntfs_mount() will fail the
+	   mount if the log is dirty or the filesystem has a Windows
+	   hibernate image. */
 	vol = ntfs_mount(device, NTFS_MNT_FORENSIC);
 	if (vol == NULL) {
 		msg("Couldn't open filesystem on %s", device);
@@ -261,10 +268,6 @@ static void handle_ntfs(const char *device, uint64_t sectors)
 	}
 	if (NVolWasDirty(vol)) {
 		msg("Filesystem on %s needs checking, skipping", device);
-		goto out;
-	}
-	if (!NVolLogFileEmpty(vol)) {
-		msg("Unclean filesystem on %s, skipping", device);
 		goto out;
 	}
 	bitmap_len = vol->lcnbmp_na->data_size;
