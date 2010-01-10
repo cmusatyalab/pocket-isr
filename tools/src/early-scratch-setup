@@ -1,0 +1,60 @@
+#!/bin/bash
+#
+# early-scratch-setup: Set up scratch volume with /home and swap
+#
+# chkconfig: 345 00 99
+# description: Set up scratch volume with /home and swap for live image.
+
+. /etc/init.d/functions
+
+set -e
+
+# cmdline_option, default
+get_arg()  {
+	for arg in `cat /proc/cmdline` ; do
+		if [ "${arg##$1=}" != "$arg" ] ; then
+			echo "${arg##$1=}"
+			return
+		fi
+	done
+	echo "$2"
+}
+
+if [ "$1" != "start" ] || ! strstr "`cat /proc/cmdline`" scratch_volume ; then
+	exit 0
+fi
+
+# MiB
+swap_size=`get_arg swap_size 2048`
+# Minimum size (MiB)
+store_size=`get_arg scratch_size $(($swap_size + 128))`
+
+echo "Setting up scratch volume on local disk..."
+
+# Create a DM volume containing all available free space
+/usr/sbin/gather_free_space -m "$store_size" live-scratch-store \
+	-x /dev/mapper/live-osimg-min \
+	-x `readlink -f /dev/live`
+
+# Create an encrypted DM volume on top of it
+cryptsetup create live-scratch-pv -c aes-xts-plain -d /dev/urandom \
+	/dev/mapper/live-scratch-store
+
+# Create an LVM volume group on that
+pvcreate /dev/mapper/live-scratch-pv >/dev/null
+vgcreate live-scratch /dev/mapper/live-scratch-pv >/dev/null
+
+# Create swap and home partitions inside that
+lvcreate -n swap -L "${swap_size}M" live-scratch >/dev/null
+lvcreate -n home -l "100%FREE" live-scratch >/dev/null
+
+# Format and mount home partition
+/sbin/mkfs.ext4 -q -E lazy_itable_init=1 /dev/live-scratch/home
+mount /dev/live-scratch/home /home
+
+# Format and enable swap.  We use this to make the boot device hot-pluggable
+# without implementing a Dracut hook to copy the live image to the scratch
+# device: we just boot with the existing live_ram option, which reads the
+# squashfs into tmpfs, then we let tmpfs swap the data if necessary.
+mkswap -f /dev/live-scratch/swap >/dev/null
+swapon /dev/live-scratch/swap
