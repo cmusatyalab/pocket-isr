@@ -29,6 +29,7 @@
 #include <ntfs/volume.h>
 #include <ntfs/attrib.h>
 #include <ntfs/bitmap.h>
+#include <ntfs/logging.h>
 #include <glib.h>
 
 #define MIN_EXTENT (4 << 11)  /* sectors */
@@ -249,7 +250,8 @@ static void handle_ntfs(const char *device, uint64_t sectors)
 
 	(void) sectors;
 
-	/* XXX ntfs logging? */
+	if (verbose)
+		ntfs_log_set_handler(ntfs_log_handler_stderr);
 
 	/* We ask for a forensic mount so that the volume header won't be
 	   updated.  That doesn't guarantee that the filesystem isn't
@@ -259,7 +261,8 @@ static void handle_ntfs(const char *device, uint64_t sectors)
 	   hibernate image. */
 	vol = ntfs_mount(device, NTFS_MNT_FORENSIC);
 	if (vol == NULL) {
-		msg("Couldn't open filesystem on %s", device);
+		msg("Couldn't open filesystem on %s; it may be unclean "
+		                        "or hibernated", device);
 		return;
 	}
 	if (ntfs_version_is_supported(vol)) {
