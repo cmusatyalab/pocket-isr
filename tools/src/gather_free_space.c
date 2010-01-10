@@ -32,11 +32,10 @@
 #include <ntfs/logging.h>
 #include <glib.h>
 
-#define MIN_EXTENT (4 << 11)  /* sectors */
-
 /* Command-line options */
 const char **exclude;
 unsigned minsize = 4;  /* MiB */
+unsigned min_extent = 4 << 10;  /* KiB */
 gboolean quiet;
 gboolean verbose;
 gboolean dry_run;
@@ -44,6 +43,7 @@ gboolean dry_run;
 static const GOptionEntry options[] = {
 	{"exclude", 'x', 0, G_OPTION_ARG_STRING_ARRAY, &exclude, "Skip the specified device", "DEVICE"},
 	{"min", 'm', 0, G_OPTION_ARG_INT, &minsize, "Minimum size for new device", "MiB"},
+	{"min-extent", 'e', 0, G_OPTION_ARG_INT, &min_extent, "Minimum length of free space extent", "KiB"},
 	{"test", 't', 0, G_OPTION_ARG_NONE, &dry_run, "Do everything except create the device", NULL},
 	{"quiet", 'q', 0, G_OPTION_ARG_NONE, &quiet, "Suppress summary information", NULL},
 	{"verbose", 'v', 0, G_OPTION_ARG_NONE, &verbose, "Be verbose", NULL},
@@ -52,6 +52,7 @@ static const GOptionEntry options[] = {
 
 /* Other globals */
 struct dm_task *task;
+unsigned min_extent_sectors;
 uint64_t used_sectors;
 
 /* Logging */
@@ -180,7 +181,7 @@ static void add_extent(const char *device, uint64_t start_sect,
 {
 	gchar *args;
 
-	if (sect_count < MIN_EXTENT)
+	if (sect_count < min_extent_sectors)
 		return;
 	args = g_strdup_printf("%s %llu", device, start_sect);
 	if (!dm_task_add_target(task, used_sectors, sect_count,
@@ -441,6 +442,7 @@ int main(int argc, char **argv)
 	if (!g_option_context_parse(opt_ctx, &argc, &argv, &err))
 		die("%s", err->message);
 	g_option_context_free(opt_ctx);
+	min_extent_sectors = MAX(min_extent << 1, 1);
 
 	if (argc < 2)
 		die("You must specify a device name.");
