@@ -6,25 +6,37 @@ ifdef LOCALREPO
 REPO := file://$(abspath $(OUTDIR))/$(ARCH)/
 endif
 
+# $1 = specfile
+# $2 = tmpdir
 ifdef KEEPDIR
 rmtmpdir = echo "Build directory for spec file $(1) retained at $(2)"
 else
 rmtmpdir = rm -rf $(2)
 endif
 
-# $1 = sources
-# $2 = specfile
+# $1 = specfile
+# $2 = source number (omit for all)
+getsources = $(shell awk '/Name:/ {name = $$2} \
+	/Version:/ {ver = $$2} \
+	/Source$(if $(2),$(2),[0-9]+):/ { \
+		gsub("%{name}", name); \
+		gsub("%{version}", ver); \
+		print $$2 \
+	}' $(1))
+
+# $1 = specfile
 buildpackage = @tmp=`mktemp -dt pocket-isr-rpm-XXXXXXXX` && \
 	mkdir -p $$tmp/BUILD $$tmp/RPMS $$tmp/SOURCES $$tmp/SPECS \
 		$$tmp/SRPMS && \
-	cp $(1) $$tmp/SOURCES/ && \
-	rpmbuild -ba --define "_topdir $$tmp" $(2) && \
+	cp $(addprefix $(dir $(1)),$(notdir $(call getsources,$(1)))) \
+		$$tmp/SOURCES/ && \
+	rpmbuild -ba --define "_topdir $$tmp" $(1) && \
 	mkdir -p $(OUTDIR)/SRPMS $(OUTDIR)/$(ARCH)/debug && \
 	mv $$tmp/SRPMS/*.rpm $(OUTDIR)/SRPMS && \
 	(mv $$tmp/RPMS/*/*debuginfo*.rpm $(OUTDIR)/$(ARCH)/debug \
 		2>/dev/null ||:) && \
 	mv $$tmp/RPMS/*/*.rpm $(OUTDIR)/$(ARCH) && \
-	$(call rmtmpdir,$(2),$$tmp)
+	$(call rmtmpdir,$(1),$$tmp)
 
 .PHONY: all
 # Does not include "iso", since that needs root permissions to build
@@ -34,7 +46,7 @@ all: artwork tools repo createrepo
 artwork:
 	rm -f artwork/*.tar.gz
 	$(MAKE) -C artwork dist
-	$(call buildpackage,artwork/*.tar.gz,artwork/*.spec)
+	$(call buildpackage,artwork/*.spec)
 
 .PHONY: tools
 tools:
@@ -42,11 +54,11 @@ tools:
 	cd tools && autoreconf -fi
 	cd tools && ./configure
 	$(MAKE) -C tools distcheck
-	$(call buildpackage,tools/*.tar.gz,tools/*.spec)
+	$(call buildpackage,tools/*.spec)
 
 .PHONY: repo
 repo:
-	$(call buildpackage,repo/*.repo repo/RPM-GPG-KEY-*,repo/*.spec)
+	$(call buildpackage,repo/*.spec)
 
 .PHONY: createrepo
 createrepo:
