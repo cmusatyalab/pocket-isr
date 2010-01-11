@@ -1,0 +1,230 @@
+%include /usr/share/spin-kickstarts/fedora-live-base.ks
+
+bootloader --timeout=0
+selinux --disabled
+# fedora-live-base.ks uses the Fedora repos corresponding to whatever
+# Fedora release we're running on.  Do the same for the OpenISR repository
+# to ensure that we're pulling packages from the right place.
+repo --name=openisr --baseurl=http://isr.cmu.edu/software/fedora/fc!!FVER!!/$basearch/
+repo --name=pocket-isr --baseurl=!!REPO!!
+
+%packages --instLangs C:en
+@lxde-desktop
+lxlauncher
+obconf
+slim
+firefox
+gmixer
+xdg-user-dirs-gtk
+alsa-plugins-pulseaudio
+NetworkManager-gnome
+xcompmgr
+# Needed to disable SELinux
+lokkit
+
+# make sure kpackagekit doesn't end up the LXDE live images
+gnome-packagekit*
+-kpackagekit
+
+# make sure polkit-qt doesn't end up the LXDE live images
+# this is not yet in rawide
+#polkit-gnome
+#-polkit-qt
+
+# make sure xfce4-notifyd is not pulled in
+-xfce4-notifyd
+notification-daemon
+
+# Prevent dmsquash-live Dracut module from kicking the initial boot
+# device off the USB bus in ondisk mode
+-eject
+
+# Command line
+yum-utils
+yum-presto
+
+# Remove things we don't need
+-@dial-up
+-@printing
+-gpicview
+-gnome-packagekit-extra
+-anaconda
+-abrt-desktop
+-printer-filters
+-ypbind
+-yp-tools
+-nfs-utils
+-rpcbind
+
+# Remove unneeded boot options
+-isomd5sum
+-memtest86+
+
+# Save space
+# Dictionaries
+-aspell-*
+-hunspell-*
+-words
+# i18n
+-ibus*
+-cjkuni-uming-fonts
+-un-core-dotum-fonts
+-vlgothic-fonts
+-jomolhari-fonts
+# Other
+-nss_db
+-sendmail
+ssmtp
+-man-pages-*
+
+# drop some system-config things
+-system-config-boot
+-system-config-language
+-system-config-lvm
+-system-config-network
+-system-config-rootpassword
+#-system-config-services
+-policycoreutils-gui
+
+# Genericize
+-fedora-release
+generic-release
+-fedora-release-notes
+generic-release-notes
+-fedora-logos
+generic-logos
+# Prevent the Hot Dog Linux logo from being shown at boot
+-plymouth-system-theme
+
+# Add custom packages
+openisr-release
+openisr-client
+pocket-isr-release
+pocket-isr-artwork
+pocket-isr-tools
+%end
+
+%post --nochroot --interpreter /usr/bin/perl
+# Add -ondisk entries to syslinux menu and disable menu hiding
+use strict;
+use warnings;
+
+# live_ram - Tell Dracut to copy the live image into tmpfs before using it
+# scratch_volume - Have our initscript set up scratch volume and swapfile
+# nopersistenthome - Don't mount /home (scratch_volume is doing it)
+# noswap - Don't enable swap partitions (we're using the scratch volume)
+my $ondisk_args = "live_ram scratch_volume nopersistenthome noswap";
+my $ondisk_suffix = "using free space on hard disk";
+
+sub write_stanza {
+	my $fd = shift;
+	my $label = shift;
+	my $is_efi = shift;
+	my @opts = @_;
+
+	if ($is_efi) {
+		print $fd "title $label\n";
+	} else {
+		print $fd "label $label\n";
+	}
+	for my $line (@opts) {
+		if (!$is_efi and $line =~ /\s+append/) {
+			print FD "$line $ondisk_args \n";
+		} elsif ($is_efi and $line =~ /\s+kernel/) {
+			print FD "$line $ondisk_args \n";
+		} elsif ($line =~ /menu label/) {
+			print FD "$line $ondisk_suffix\n";
+		} elsif ($line =~ /menu default/) {
+			next;
+		} else {
+			print FD "$line\n";
+		}
+	}
+}
+
+sub handle_file {
+	my $file = shift;
+	my $is_efi = shift;
+
+	open(FD, $file)
+		or die "Couldn't read $file";
+	my @data = <FD>;
+	close(FD);
+	chomp @data;
+
+	open(FD, ">", $file)
+		or die "Couldn't write $file";
+	my $need_label = "";
+	my @labelopts;
+	for my $line (@data, "label END") {
+		if ($line =~ /^(label|title)\s+(.*)$/) {
+			my $label = $2;
+			write_stanza(\*FD, $need_label, $is_efi, @labelopts)
+				unless $need_label eq "";
+			if ($label ne "local") {
+				$need_label = "$label-ondisk";
+			} else {
+				$need_label = "";
+			}
+			undef @labelopts;
+		} else {
+			push @labelopts, $line;
+		}
+
+		print FD "$line\n"
+			if $line !~ /menu hidden|hiddenmenu|label END/;
+	}
+	close(FD);
+}
+
+handle_file "$ENV{LIVE_ROOT}/isolinux/isolinux.cfg", 0;
+handle_file "$ENV{LIVE_ROOT}/EFI/boot/grub.conf", 1;
+%end
+
+%post
+# create /etc/sysconfig/desktop (needed for installation)
+cat >> /etc/sysconfig/desktop <<EOF
+PREFERRED=/usr/bin/startlxde
+DISPLAYMANAGER=/usr/bin/slim-dynwm
+EOF
+
+# Strip unneeded locales
+localedef --list-archive | grep -v en | xargs localedef --delete-from-archive
+mv /usr/lib/locale/locale-archive /usr/lib/locale/locale-archive.tmpl
+/usr/sbin/build-locale-archive
+
+# Set default desktop background for newly-created accounts
+mkdir -p /etc/skel/.config/pcmanfm
+cat > /etc/skel/.config/pcmanfm/main.lxde <<EOF
+[Desktop]
+wallpaper=/usr/share/backgrounds/isr/standard.png
+show_wallpaper=1
+EOF
+
+cat >> /etc/rc.d/init.d/livesys << EOF
+# disable screensaver locking and make sure gamin gets started
+rm -f /etc/xdg/lxsession/LXDE/autostart
+cat >> /etc/xdg/lxsession/LXDE/autostart << FOE
+/usr/libexec/gam_server
+@lxde-settings-daemon
+@pulseaudio -D
+@lxpanel --profile LXDE
+@pcmanfm -d
+FOE
+
+# set up display manager
+cat >> /etc/slim.conf << FOE
+auto_login		yes
+default_user		liveuser
+xserver_arguments	-nolisten tcp
+FOE
+
+# Add liveuser to necessary system groups
+usermod -a -G isrusers liveuser
+
+# this goes at the end after all other changes.
+chown -R liveuser:liveuser /home/liveuser
+
+EOF
+
+%end
