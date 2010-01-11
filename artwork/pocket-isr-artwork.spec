@@ -24,7 +24,6 @@ rm -rf $RPM_BUILD_ROOT
 %files
 %defattr(-,root,root,-)
 %doc COPYING Credits
-%dir %{_datadir}/backgrounds/isr
 %{_datadir}/backgrounds/isr
 
 %changelog
