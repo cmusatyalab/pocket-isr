@@ -222,6 +222,11 @@ FOE
 # Add liveuser to necessary system groups
 usermod -a -G isrusers liveuser
 
+# Copy OpenISR user configuration from the boot disk, if present
+if [ -f /mnt/live/.openisrrc ] ; then
+	cp /mnt/live/.openisrrc /home/liveuser/.openisrrc
+fi
+
 # this goes at the end after all other changes.
 chown -R liveuser:liveuser /home/liveuser
 
