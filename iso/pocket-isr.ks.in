@@ -19,6 +19,7 @@ xdg-user-dirs-gtk
 alsa-plugins-pulseaudio
 NetworkManager-gnome
 xcompmgr
+yum-utils
 # Needed to disable SELinux
 lokkit
 
@@ -38,9 +39,6 @@ notification-daemon
 # Prevent dmsquash-live Dracut module from kicking the initial boot
 # device off the USB bus in ondisk mode
 -eject
-
-# Command line
-yum-utils
 
 # Remove things we don't need
 -@dial-up
