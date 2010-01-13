@@ -40,7 +40,7 @@ buildpackage = @tmp=`mktemp -dt pocket-isr-rpm-XXXXXXXX` && \
 
 .PHONY: all
 # Does not include "iso", since that needs root permissions to build
-all: artwork tools repo createrepo
+all: artwork tools repo virtualbox createrepo
 
 .PHONY: artwork
 artwork:
@@ -60,6 +60,13 @@ tools:
 repo:
 	$(call buildpackage,repo/*.spec)
 
+.PHONY: virtualbox
+virtualbox: VBOXURL := $(call getsources,virtualbox/*.spec,0)
+virtualbox: VBOXSRC := virtualbox/$(notdir $(VBOXURL))
+virtualbox:
+	[ -f $(VBOXSRC) ] || wget -O $(VBOXSRC) $(VBOXURL)
+	$(call buildpackage,virtualbox/*.spec)
+
 .PHONY: createrepo
 createrepo:
 	createrepo -d $(OUTDIR)/SRPMS
@@ -73,3 +80,7 @@ iso:
 .PHONY: clean
 clean:
 	rm -rf $(OUTDIR)
+
+.PHONY: mrproper
+mrproper: clean
+	rm -f virtualbox/*.tar.bz2

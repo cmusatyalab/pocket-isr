@@ -1,1 +1,3 @@
 output
+# Created by the top-level Makefile
+virtualbox/VirtualBox-*-OSE.tar.bz2
