@@ -109,6 +109,7 @@ openisr-client
 pocket-isr-release
 pocket-isr-artwork
 pocket-isr-tools
+virtualbox-ose-3.0
 %end
 
 %post --nochroot --interpreter /usr/bin/perl
@@ -230,7 +231,7 @@ xserver_arguments	-nolisten tcp
 FOE
 
 # Add liveuser to necessary system groups
-usermod -a -G isrusers liveuser
+usermod -a -G isrusers,vboxusers liveuser
 
 # Copy OpenISR user configuration from the boot disk, if present
 if [ -f /mnt/live/.openisrrc ] ; then
