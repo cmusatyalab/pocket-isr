@@ -13,7 +13,7 @@ repo --name=pocket-isr --baseurl=!!REPO!!
 lxlauncher
 obconf
 slim
-firefox
+midori
 gmixer
 xdg-user-dirs-gtk
 alsa-plugins-pulseaudio
@@ -41,7 +41,6 @@ notification-daemon
 
 # Command line
 yum-utils
-yum-presto
 
 # Remove things we don't need
 -@dial-up
@@ -55,6 +54,9 @@ yum-presto
 -yp-tools
 -nfs-utils
 -rpcbind
+-selinux-policy-targeted
+-setroubleshoot
+-smolt-firstboot
 
 # Remove unneeded boot options
 -isomd5sum
@@ -67,11 +69,18 @@ yum-presto
 -words
 # i18n
 -ibus*
+-m17n-*
 -cjkuni-uming-fonts
 -un-core-dotum-fonts
 -vlgothic-fonts
 -jomolhari-fonts
+-kacst*fonts*
+-khmeros*fonts*
+-lohit-*-fonts
+-paktype*fonts*
+-thai*fonts*
 # Other
+-bitmap-fonts
 -nss_db
 -sendmail
 ssmtp
@@ -82,8 +91,8 @@ ssmtp
 -system-config-language
 -system-config-lvm
 -system-config-network
+-system-config-printer
 -system-config-rootpassword
-#-system-config-services
 -policycoreutils-gui
 
 # Genericize
@@ -192,6 +201,9 @@ EOF
 localedef --list-archive | grep -v en | xargs localedef --delete-from-archive
 mv /usr/lib/locale/locale-archive /usr/lib/locale/locale-archive.tmpl
 /usr/sbin/build-locale-archive
+
+# Remove docfiles for non-ISR packages
+rpm -qad '!(open|pocket-)isr*' | xargs rm -f
 
 # Set default desktop background for newly-created accounts
 mkdir -p /etc/skel/.config/pcmanfm
