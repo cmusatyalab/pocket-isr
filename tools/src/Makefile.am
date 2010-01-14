@@ -3,6 +3,7 @@ AM_CPPFLAGS += -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64
 
 initdir = $(sysconfdir)/rc.d/init.d
 
+dist_bin_SCRIPTS = check_isr_storage
 sbin_PROGRAMS = gather_free_space
 dist_init_SCRIPTS = early-scratch-setup
 

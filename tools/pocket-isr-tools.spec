@@ -12,6 +12,8 @@ BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 BuildRequires:  glib2-devel device-mapper-devel libblkid-devel
 BuildRequires:  e2fsprogs-devel ntfsprogs-devel
 
+Requires:       libnotify
+
 %description
 Tools for the Pocket ISR live image, including a utility to collect free
 disk space into a device-mapper volume and an initscript to create transient
@@ -35,6 +37,7 @@ rm -rf $RPM_BUILD_ROOT
 %defattr(-,root,root,-)
 %doc COPYING
 %{_initddir}/early-scratch-setup
+%{_bindir}/check_isr_storage
 %{_sbindir}/gather_free_space
 
 %post
