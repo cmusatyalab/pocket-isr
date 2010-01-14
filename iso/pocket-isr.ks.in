@@ -1,6 +1,11 @@
 %include /usr/share/spin-kickstarts/fedora-live-base.ks
 
-bootloader --timeout=0
+# live_ram - Tell Dracut to copy the live image into tmpfs before using it
+# scratch_volume - Have our initscript set up scratch volume and swapfile
+# nopersistenthome - Don't mount /home (scratch_volume is doing it)
+# noswap - Don't enable swap partitions (we're using the scratch volume)
+bootloader --timeout=0 --append="live_ram scratch_volume nopersistenthome noswap"
+
 selinux --disabled
 # fedora-live-base.ks uses the Fedora repos corresponding to whatever
 # Fedora release we're running on.  Do the same for the OpenISR repository
@@ -37,7 +42,7 @@ gnome-packagekit*
 notification-daemon
 
 # Prevent dmsquash-live Dracut module from kicking the initial boot
-# device off the USB bus in ondisk mode
+# device off the USB bus when live_ram is enabled
 -eject
 
 # Remove things we don't need
@@ -113,16 +118,12 @@ virtualbox-ose-3.0
 %end
 
 %post --nochroot --interpreter /usr/bin/perl
-# Add -ondisk entries to syslinux menu and disable menu hiding
+# Add -persist entries to syslinux menu and disable menu hiding
 use strict;
 use warnings;
 
-# live_ram - Tell Dracut to copy the live image into tmpfs before using it
-# scratch_volume - Have our initscript set up scratch volume and swapfile
-# nopersistenthome - Don't mount /home (scratch_volume is doing it)
-# noswap - Don't enable swap partitions (we're using the scratch volume)
-my $ondisk_args = "live_ram scratch_volume nopersistenthome noswap";
-my $ondisk_suffix = "using free space on hard disk";
+my $persist_remove = "live_ram|scratch_volume|nopersistenthome|noswap";
+my $persist_suffix = "using persistent parcel storage";
 
 sub write_stanza {
 	my $fd = shift;
@@ -136,15 +137,12 @@ sub write_stanza {
 		print $fd "label $label\n";
 	}
 	for my $line (@opts) {
-		if (!$is_efi and $line =~ /\s+append/) {
-			print FD "$line $ondisk_args \n";
-		} elsif ($is_efi and $line =~ /\s+kernel/) {
-			print FD "$line $ondisk_args \n";
-		} elsif ($line =~ /menu label/) {
-			print FD "$line $ondisk_suffix\n";
+		if ($line =~ /menu label/) {
+			print FD "$line $persist_suffix\n";
 		} elsif ($line =~ /menu default/) {
 			next;
 		} else {
+			$line =~ s/ ($persist_remove)(?= )//g;
 			print FD "$line\n";
 		}
 	}
@@ -170,7 +168,7 @@ sub handle_file {
 			write_stanza(\*FD, $need_label, $is_efi, @labelopts)
 				unless $need_label eq "";
 			if ($label ne "local") {
-				$need_label = "$label-ondisk";
+				$need_label = "$label-persist";
 			} else {
 				$need_label = "";
 			}
