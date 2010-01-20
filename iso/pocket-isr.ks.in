@@ -138,12 +138,12 @@ sub write_stanza {
 	}
 	for my $line (@opts) {
 		if ($line =~ /menu label/) {
-			print FD "$line $persist_suffix\n";
+			print $fd "$line $persist_suffix\n";
 		} elsif ($line =~ /menu default/) {
 			next;
 		} else {
 			$line =~ s/ ($persist_remove)(?= )//g;
-			print FD "$line\n";
+			print $fd "$line\n";
 		}
 	}
 }
