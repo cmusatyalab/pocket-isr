@@ -15,7 +15,7 @@
 Summary: 	VirtualBox OSE
 Name: 		virtualbox-ose-3.0
 Version: 	3.0.12
-Release: 	1%{?dist}
+Release: 	2%{?dist}
 Group: 		Applications/System
 License:	GPLv2 and (GPLv2 or CDDL)
 
@@ -200,5 +200,8 @@ for m in vboxdrv vboxnetflt vboxnetadp; do
 done
 
 %changelog
+* Wed Jan 20 2010 Benjamin Gilbert <bgilbert@cs.cmu.edu> - 3.0.12-2
+- Minor cleanup to build script
+
 * Tue Jan 12 2010 Benjamin Gilbert <bgilbert@cs.cmu.edu> - 3.0.12-1
 - Initial package
