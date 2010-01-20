@@ -69,9 +69,9 @@ virtualbox:
 
 .PHONY: createrepo
 createrepo:
-	createrepo -d $(OUTDIR)/SRPMS
-	createrepo -d $(OUTDIR)/$(ARCH)
-	createrepo -d $(OUTDIR)/$(ARCH)/debug
+	createrepo -qd $(OUTDIR)/SRPMS
+	createrepo -qd $(OUTDIR)/$(ARCH) -x 'debug/*'
+	createrepo -qd $(OUTDIR)/$(ARCH)/debug
 
 .PHONY: iso
 iso:
