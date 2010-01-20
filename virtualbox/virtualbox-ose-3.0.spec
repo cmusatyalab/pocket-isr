@@ -110,16 +110,14 @@ done
 # --ose disables dkms setup for some reason, so we have to do it ourselves
 inbase=../../src/VBox/HostDrivers
 outbase=%{buildroot}/usr/share/virtualbox/src
+cp $inbase/Support/linux/dkms.conf $outbase/vboxdrv/
+cp $inbase/VBoxNetAdp/linux/dkms.conf $outbase/vboxnetadp/
+cp $inbase/VBoxNetFlt/linux/dkms.conf $outbase/vboxnetflt/
 for d in vboxdrv vboxnetflt vboxnetadp ; do
 	cp $inbase/linux/do_Module.symvers $outbase/$d
 	ln -s ../share/virtualbox/src/$d %{buildroot}/usr/src/$d-%{version}
+	sed -ie 's/_VERSION_/%{version}/' $outbase/$d/dkms.conf
 done
-sed -e 's/_VERSION_/%{version}/' $inbase/Support/linux/dkms.conf \
-	> $outbase/vboxdrv/dkms.conf
-sed -e 's/_VERSION_/%{version}/' $inbase/VBoxNetAdp/linux/dkms.conf \
-	> $outbase/vboxnetadp/dkms.conf
-sed -e 's/_VERSION_/%{version}/' $inbase/VBoxNetFlt/linux/dkms.conf \
-	> $outbase/vboxnetflt/dkms.conf
 
 sed -e 's|%NOLSB%||g' -e 's|%DEBIAN%||g' -e 's|%PACKAGE%|virtualbox|g' \
 	../../src/VBox/Installer/linux/vboxdrv.sh.in > \
