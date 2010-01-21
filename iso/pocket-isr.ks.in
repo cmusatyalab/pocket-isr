@@ -210,7 +210,7 @@ wallpaper=/usr/share/backgrounds/isr/standard.png
 show_wallpaper=1
 EOF
 
-cat >> /etc/rc.d/init.d/livesys << EOF
+cat >> /etc/rc.d/init.d/livesys << 'EOF'
 # disable screensaver locking and make sure gamin gets started
 rm -f /etc/xdg/lxsession/LXDE/autostart
 # Programs prefixed by @ are restarted if they crash
@@ -236,6 +236,13 @@ usermod -a -G isrusers,vboxusers liveuser
 # Copy OpenISR user configuration from the boot disk, if present
 if [ -f /mnt/live/.openisrrc ] ; then
 	cp /mnt/live/.openisrrc /home/liveuser/.openisrrc
+fi
+
+# If we booted in normal mode from CD, unmount it so that the user can eject
+# the disc, since we know there won't be a hoard cache there
+if strstr "`cat /proc/cmdline`" live_ram && \
+		[ "`/sbin/blkid -s TYPE -o value /dev/live`" = iso9660 ] ; then
+	umount /mnt/live
 fi
 
 # this goes at the end after all other changes.
