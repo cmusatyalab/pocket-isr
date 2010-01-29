@@ -230,6 +230,9 @@ default_user		liveuser
 xserver_arguments	-nolisten tcp
 FOE
 
+# Set hostname so that parcel lockholder logs don't call us "localhost"
+sed -ie 's/^HOSTNAME=.*/HOSTNAME=pocket-isr/' /etc/sysconfig/network
+
 # Add liveuser to necessary system groups
 usermod -a -G isrusers,vboxusers liveuser
 
