@@ -248,6 +248,11 @@ if strstr "`cat /proc/cmdline`" live_ram && \
 	umount /mnt/live
 fi
 
+# Disable annoying VirtualBox information dialogs.  These are useful, once,
+# to educate the user, but in normal mode the "Don't show this message again"
+# checkbox doesn't persist across reboots.
+su - liveuser -c "VBoxManage setextradata global GUI/SuppressMessages confirmGoingFullscreen,confirmInputCapture,remindAboutAutoCapture,remindAboutMouseIntegrationOn,remindAboutMouseIntegrationOff,remindAboutWrongColorDepth"
+
 # this goes at the end after all other changes.
 chown -R liveuser:liveuser /home/liveuser
 
