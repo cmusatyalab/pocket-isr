@@ -1,6 +1,6 @@
 OUTDIR = output
 
-ARCH := $(shell rpm --eval %{_target_cpu})
+ARCH := $(shell rpm --eval %{_arch})
 
 ifdef LOCALREPO
 REPO := file://$(abspath $(OUTDIR))/$(ARCH)/
