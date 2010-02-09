@@ -12,7 +12,8 @@ image: need_root
 	@# set differently by the caller
 	sed -e 's|!!REPO!!|$(REPO)|g' -e 's/!!FVER!!/$(FVER)/g' \
 		$(KICKSTART).in > $(KICKSTART)
-	livecd-creator -c $(KICKSTART) -f $(DESC) --cache=$(CACHE)
+	setarch $(ARCH) livecd-creator -c $(KICKSTART) -f $(DESC) \
+		--cache=$(CACHE)
 
 .PHONY: need_root
 need_root:
