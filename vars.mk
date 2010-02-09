@@ -1,0 +1,3 @@
+VERSION = 0.9.7-1
+FVER = 12
+ARCH = i386

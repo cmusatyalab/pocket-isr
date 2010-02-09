@@ -1,6 +1,6 @@
+include vars.mk
+
 OUTDIR = output
-PROFILE = fedora-12
-ARCH = i386
 
 ifdef LOCALREPO
 REPO := file://$(abspath $(OUTDIR))/$(ARCH)/
@@ -21,10 +21,10 @@ buildpackage = @sources=`mktemp -dt pocket-isr-sources-XXXXXXXX` && \
 	binaries=`mktemp -dt pocket-isr-binaries-XXXXXXXX` && \
 	cp $(addprefix $(dir $(1)),$(notdir $(call getsources,$(1)))) \
 		$$sources && \
-	mock --buildsrpm -r "$(PROFILE)-$(ARCH)" -v --spec $(1) \
+	mock --buildsrpm -r "fedora-$(FVER)-$(ARCH)" -v --spec $(1) \
 		--sources $$sources --resultdir $$binaries && \
 	rm -r $$sources && \
-	mock $$binaries/*.src.rpm -r "$(PROFILE)-$(ARCH)" -v \
+	mock $$binaries/*.src.rpm -r "fedora-$(FVER)-$(ARCH)" -v \
 		--resultdir $$binaries && \
 	mkdir -p $(OUTDIR)/SRPMS $(OUTDIR)/$(ARCH)/debug && \
 	mv $$binaries/*.src.rpm $(OUTDIR)/SRPMS && \

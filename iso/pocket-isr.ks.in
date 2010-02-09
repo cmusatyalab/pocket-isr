@@ -1,4 +1,4 @@
-%include /usr/share/spin-kickstarts/fedora-live-base.ks
+%include fedora-live-base.ks
 
 # live_ram - Tell Dracut to copy the live image into tmpfs before using it
 # scratch_volume - Have our initscript set up scratch volume and swapfile

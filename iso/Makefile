@@ -1,11 +1,10 @@
-VERSION = 0.9.7-1
+include ../vars.mk
+
 REPO = http://isr.cmu.edu/software/pocket-isr/repo/!!FVER!!/$$basearch/
 CACHE = cache
 
 DESC = Pocket-ISR-$(VERSION)
 KICKSTART = pocket-isr.ks
-FVER := $(shell rpm -q --whatprovides redhat-release \
-	--queryformat "%{VERSION}" 2>/dev/null | tr -cd '0-9')
 
 .PHONY: image
 image: need_root
