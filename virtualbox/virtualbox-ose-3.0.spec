@@ -47,7 +47,7 @@ virtualization software solution on the market.
 %build
 cp %{SOURCE1} LocalConfig.kmk
 # Web service disabled, since it has build problems
-./configure --ose
+./configure --ose --disable-kmods
 source $(pwd)/env.sh
 kmk --no-print-directory \
 	PATH_OUT=$(pwd)/out \
