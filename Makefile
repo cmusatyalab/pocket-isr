@@ -1,17 +1,9 @@
 OUTDIR = output
-
-ARCH := $(shell rpm --eval %{_arch})
+PROFILE = fedora-12
+ARCH = i386
 
 ifdef LOCALREPO
 REPO := file://$(abspath $(OUTDIR))/$(ARCH)/
-endif
-
-# $1 = specfile
-# $2 = tmpdir
-ifdef KEEPDIR
-rmtmpdir = echo "Build directory for spec file $(1) retained at $(2)"
-else
-rmtmpdir = rm -rf $(2)
 endif
 
 # $1 = specfile
@@ -25,18 +17,21 @@ getsources = $(shell awk '/Name:/ {name = $$2} \
 	}' $(1))
 
 # $1 = specfile
-buildpackage = @tmp=`mktemp -dt pocket-isr-rpm-XXXXXXXX` && \
-	mkdir -p $$tmp/BUILD $$tmp/RPMS $$tmp/SOURCES $$tmp/SPECS \
-		$$tmp/SRPMS && \
+buildpackage = @sources=`mktemp -dt pocket-isr-sources-XXXXXXXX` && \
+	binaries=`mktemp -dt pocket-isr-binaries-XXXXXXXX` && \
 	cp $(addprefix $(dir $(1)),$(notdir $(call getsources,$(1)))) \
-		$$tmp/SOURCES/ && \
-	rpmbuild -ba --define "_topdir $$tmp" $(1) && \
+		$$sources && \
+	mock --buildsrpm -r "$(PROFILE)-$(ARCH)" -v --spec $(1) \
+		--sources $$sources --resultdir $$binaries && \
+	rm -r $$sources && \
+	mock $$binaries/*.src.rpm -r "$(PROFILE)-$(ARCH)" -v \
+		--resultdir $$binaries && \
 	mkdir -p $(OUTDIR)/SRPMS $(OUTDIR)/$(ARCH)/debug && \
-	mv $$tmp/SRPMS/*.rpm $(OUTDIR)/SRPMS && \
-	(mv $$tmp/RPMS/*/*debuginfo*.rpm $(OUTDIR)/$(ARCH)/debug \
+	mv $$binaries/*.src.rpm $(OUTDIR)/SRPMS && \
+	(mv $$binaries/*debuginfo*.rpm $(OUTDIR)/$(ARCH)/debug \
 		2>/dev/null ||:) && \
-	mv $$tmp/RPMS/*/*.rpm $(OUTDIR)/$(ARCH) && \
-	$(call rmtmpdir,$(1),$$tmp)
+	mv $$binaries/*.rpm $(OUTDIR)/$(ARCH) && \
+	rm -r $$binaries
 
 .PHONY: all
 # Does not include "iso", since that needs root permissions to build
