@@ -1,0 +1,62 @@
+BUILDING POCKET ISR
+-------------------
+
+Pocket ISR must be built on an x86-based Fedora system.  Building consists
+of two steps:
+
+- "make" will build the Pocket ISR packages and create a Yum repository
+in the OUTDIR directory, which is output/ by default.  OUTDIR can be set
+on the Make command line to write the repository to a different directory
+instead.
+
+- "make iso" will build the Pocket ISR ISO image.  This must be run as
+root.  By default, "make iso" will build the ISO with Pocket ISR packages
+from the official repository, not from the output directory we just built.
+Passing LOCALREPO=1 on the Make command line will use the OUTDIR directory
+instead.
+
+Note that the top-level Makefile is entirely composed of phony targets that
+build RPM packages and the ISO image.  Where applicable, individual
+subdirectories have their own build infrastructure for the corresponding
+sources.
+
+TESTING
+-------
+
+"make mount" as root from the iso/ directory will mount the generated
+ISO image and its component filesystem images at iso/mount_iso,
+iso/mount_squash, and iso/mount_ext3.  "make unmount" will reverse the
+process.
+
+livecd-iso-to-disk can be used to make a bootable USB key from the
+generated ISO image.
+
+COMPONENTS AND THEIR LICENSES
+-----------------------------
+
+artwork/
+	Desktop backgrounds and other artwork for Pocket ISR.
+	Built into the pocket-isr-artwork package.
+	Released under CC-BY-SA.
+
+iso/
+	Kickstart and build infrastructure for Pocket ISR ISO image.
+	Released under the GPLv2.
+
+repo/
+	Repository configuration for the Pocket ISR official repository.
+	Built into the pocket-isr-release package.
+	Released under the GPLv2.
+
+tools/
+	Tools and startup scripts for Pocket ISR.
+	Built into the pocket-isr-tools package.
+	Released under the GPLv2.
+
+virtualbox/
+	RPM packaging for VirtualBox OSE.
+	VirtualBox itself is not included in the repository, but is fetched
+	at build time.  VirtualBox OSE is released under the GPLv2, with
+	some parts dual-licensed under the CDDL.
+	Built into the virtualbox-ose-3.0 package.
+	The packaging is released under the GPLv2.
