@@ -214,6 +214,9 @@ wallpaper=/usr/share/backgrounds/isr/standard.png
 show_wallpaper=1
 EOF
 
+# Record Pocket ISR version for pocket_isr_update
+echo "!!VERSION!!" > /etc/pocket-isr-release
+
 cat >> /etc/rc.d/init.d/livesys << 'EOF'
 # disable screensaver locking and make sure gamin gets started
 rm -f /etc/xdg/lxsession/LXDE/autostart

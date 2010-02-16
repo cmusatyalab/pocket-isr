@@ -11,7 +11,7 @@ image: need_root
 	@# Regenerate the kickstart file every time, since REPO might be
 	@# set differently by the caller
 	sed -e 's|!!REPO!!|$(REPO)|g' -e 's/!!FVER!!/$(FVER)/g' \
-		$(KICKSTART).in > $(KICKSTART)
+		-e 's/!!VERSION!!/$(VERSION)/g' $(KICKSTART).in > $(KICKSTART)
 	setarch $(ARCH) livecd-creator -c $(KICKSTART) -f $(DESC) \
 		--cache=$(CACHE)
 
