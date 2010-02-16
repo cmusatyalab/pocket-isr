@@ -255,6 +255,10 @@ gconftool-2 --direct --config-source=xml:readwrite:/etc/gconf/gconf.xml.defaults
 gconftool-2 --direct --config-source=xml:readwrite:/etc/gconf/gconf.xml.defaults -s -t bool /apps/gnome-packagekit/update-icon/notify_critical false >/dev/null
 gconftool-2 --direct --config-source=xml:readwrite:/etc/gconf/gconf.xml.defaults -s -t bool /apps/gnome-packagekit/update-icon/notify_distro_upgrades false >/dev/null
 
+# Set the default browser to Midori
+gconftool-2 --direct --config-source=xml:readwrite:/etc/gconf/gconf.xml.defaults -s -t string /desktop/gnome/url-handlers/http/command "midori %s" >/dev/null
+gconftool-2 --direct --config-source=xml:readwrite:/etc/gconf/gconf.xml.defaults -s -t string /desktop/gnome/url-handlers/https/command "midori %s" >/dev/null
+
 # Set hostname so that parcel lockholder logs don't call us "localhost"
 sed -ie 's/^HOSTNAME=.*/HOSTNAME=pocket-isr/' /etc/sysconfig/network
 
