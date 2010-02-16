@@ -62,7 +62,6 @@ notification-daemon
 -smolt-firstboot
 
 # Remove unneeded boot options
--isomd5sum
 -memtest86+
 
 # Save space
@@ -118,7 +117,8 @@ virtualbox-ose-3.0
 %end
 
 %post --nochroot --interpreter /usr/bin/perl
-# Add -persist entries to syslinux menu and disable menu hiding
+# Add -persist entries to syslinux menu, remove "Verify and Boot" entries,
+# and disable menu hiding
 use strict;
 use warnings;
 
@@ -161,24 +161,28 @@ sub handle_file {
 	open(FD, ">", $file)
 		or die "Couldn't write $file";
 	my $need_label = "";
+	my $drop_stanza = 0;
 	my @labelopts;
 	for my $line (@data, "label END") {
 		if ($line =~ /^(label|title)\s+(.*)$/) {
 			my $label = $2;
 			write_stanza(\*FD, $need_label, $is_efi, @labelopts)
-				unless $need_label eq "";
+				unless $need_label eq "" or $drop_stanza;
 			if ($label ne "local") {
 				$need_label = "$label-persist";
 			} else {
 				$need_label = "";
 			}
+			# Drop "Verify and Boot" entries
+			$drop_stanza = ($label =~ /^(Verify and|check)/);
 			undef @labelopts;
 		} else {
 			push @labelopts, $line;
 		}
 
 		print FD "$line\n"
-			if $line !~ /menu hidden|hiddenmenu|label END/;
+			if $line !~ /menu hidden|hiddenmenu|label END/
+						and not $drop_stanza;
 	}
 	close(FD);
 }
