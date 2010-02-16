@@ -6,6 +6,7 @@
 # noswap - Don't enable swap partitions (we're using the scratch volume)
 bootloader --timeout=0 --append="live_ram scratch_volume nopersistenthome noswap"
 
+firewall --disabled
 selinux --disabled
 # fedora-live-base.ks uses the Fedora repos corresponding to whatever
 # Fedora release we're running on.  Do the same for the OpenISR repository
@@ -90,6 +91,7 @@ ssmtp
 
 # drop some system-config things
 -system-config-boot
+-system-config-firewall
 -system-config-language
 -system-config-lvm
 -system-config-network
