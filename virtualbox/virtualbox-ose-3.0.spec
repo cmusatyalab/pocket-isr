@@ -164,8 +164,11 @@ rm -rf %{buildroot} out AutoConfig.kmk env.sh
 %doc COPYING COPYING.CDDL
 
 %pre
-# Check for active VMs
-if pidof VBoxSVC > /dev/null 2>&1; then
+# Check for active VMs if we're upgrading from an earlier VirtualBox.  This
+# won't catch upgrades from source installs, etc., but we need to make sure
+# Live CD builds won't fail if the host building the image is currently
+# running a VM.
+if [ "$1" != 1 ] && pidof VBoxSVC > /dev/null 2>&1; then
 	cat << EOF
 A copy of VirtualBox is currently running.  Please close it and try again.
 Please note that it can take up to ten seconds for VirtualBox (in particular
