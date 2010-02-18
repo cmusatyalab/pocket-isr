@@ -9,16 +9,33 @@ in the OUTDIR directory, which is output/ by default.  OUTDIR can be set
 on the Make command line to write the repository to a different directory
 instead.
 
-- "make iso" will build the Pocket ISR ISO image.  This must be run as
-root.  By default, "make iso" will build the ISO with Pocket ISR packages
-from the official repository, not from the output directory we just built.
-Passing LOCALREPO=1 on the Make command line will use the OUTDIR directory
-instead.
+- "make iso" will build the Pocket ISR ISO image, placing the result into
+the OUTDIR directory.  This must be run as root.  By default, "make iso"
+will build the ISO with Pocket ISR packages from the official repository,
+not from the output directory we just built.  Passing LOCALREPO=1 on the
+Make command line will use the OUTDIR directory instead.
 
 Note that the top-level Makefile is entirely composed of phony targets that
 build RPM packages and the ISO image.  Where applicable, individual
 subdirectories have their own build infrastructure for the corresponding
 sources.
+
+MAKE VARIABLES
+--------------
+
+These can be set on the Make command line or by defining them in local.mk.
+
+OUTDIR
+	The directory that will hold the generated Yum repositories and ISO
+	image.  The default is output/.
+
+CACHE
+	The directory in which livecd-creator will cache downloaded RPMs.
+	The default is iso/cache.
+
+LOCALREPO
+	If set to 1, "make iso" will use packages from the OUTDIR directory
+	rather than the official Pocket ISR repository.
 
 TESTING
 -------
