@@ -2,11 +2,12 @@ include ../vars.mk
 
 OUTDIR = ../output
 CACHE = cache
+-include ../local.mk
 
 DESC = Pocket-ISR-$(VERSION)
 KICKSTART = pocket-isr.ks
 
-ifdef LOCALREPO
+ifeq ($(LOCALREPO),1)
 REPO := file://$(abspath $(OUTDIR))/$(ARCH)/
 else
 REPO := http://isr.cmu.edu/software/pocket-isr/repo/!!FVER!!/$$basearch/

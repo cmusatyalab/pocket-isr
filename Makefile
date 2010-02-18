@@ -1,6 +1,7 @@
 include vars.mk
 
 OUTDIR = output
+-include local.mk
 
 # $1 = specfile
 # $2 = source number (omit for all)
