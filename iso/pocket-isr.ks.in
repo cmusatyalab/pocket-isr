@@ -237,6 +237,7 @@ cat >> /etc/xdg/lxsession/LXDE/autostart << FOE
 @lxpanel --profile LXDE
 @pcmanfm -d
 check_isr_storage
+pocket_isr_update
 FOE
 
 # set up display manager
