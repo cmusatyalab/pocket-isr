@@ -1,10 +1,16 @@
 include ../vars.mk
 
-REPO = http://isr.cmu.edu/software/pocket-isr/repo/!!FVER!!/$$basearch/
+OUTDIR = ../output
 CACHE = cache
 
 DESC = Pocket-ISR-$(VERSION)
 KICKSTART = pocket-isr.ks
+
+ifdef LOCALREPO
+REPO := file://$(abspath $(OUTDIR))/$(ARCH)/
+else
+REPO := http://isr.cmu.edu/software/pocket-isr/repo/!!FVER!!/$$basearch/
+endif
 
 .PHONY: image
 image: need_root
@@ -12,8 +18,11 @@ image: need_root
 	@# set differently by the caller
 	sed -e 's|!!REPO!!|$(REPO)|g' -e 's/!!FVER!!/$(FVER)/g' \
 		-e 's/!!VERSION!!/$(VERSION)/g' $(KICKSTART).in > $(KICKSTART)
+	mkdir -p $(OUTDIR)
+	ln -sf $(OUTDIR)/$(DESC).iso $(DESC).iso
 	setarch $(ARCH) livecd-creator -c $(KICKSTART) -f $(DESC) \
 		--cache=$(CACHE)
+	rm -f $(DESC).iso
 
 .PHONY: need_root
 need_root:
@@ -21,7 +30,7 @@ need_root:
 
 .PHONY: clean
 clean: need_root
-	rm -f *.iso $(KICKSTART)
+	rm -f $(OUTDIR)/$(DESC).iso $(KICKSTART)
 
 .PHONY: mrproper
 mrproper: clean
@@ -30,7 +39,7 @@ mrproper: clean
 .PHONY: mount
 mount: need_root
 	mkdir mount_iso mount_squash mount_ext3
-	mount -o loop $(DESC).iso mount_iso
+	mount -o loop $(OUTDIR)/$(DESC).iso mount_iso
 	mount -o loop mount_iso/LiveOS/squashfs.img mount_squash
 	mount -o loop mount_squash/LiveOS/ext3fs.img mount_ext3
 

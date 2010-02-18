@@ -2,10 +2,6 @@ include vars.mk
 
 OUTDIR = output
 
-ifdef LOCALREPO
-REPO := file://$(abspath $(OUTDIR))/$(ARCH)/
-endif
-
 # $1 = specfile
 # $2 = source number (omit for all)
 getsources = $(shell awk '/Name:/ {name = $$2} \
@@ -70,7 +66,7 @@ createrepo:
 
 .PHONY: iso
 iso:
-	make -C iso image $(if $(REPO),REPO=$(REPO),)
+	make -C iso image OUTDIR=$(abspath $(OUTDIR))
 
 .PHONY: clean
 clean:
