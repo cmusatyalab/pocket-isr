@@ -29,6 +29,7 @@ NetworkManager-gnome
 xcompmgr
 yum-utils
 nscd
+bash-completion
 # Needed to disable SELinux
 lokkit
 
