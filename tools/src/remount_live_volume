@@ -1,0 +1,61 @@
+#!/bin/sh
+#
+# remount_live_volume: Mount /mnt/live with the appropriate permissions
+#
+# Copyright (C) 2010 Carnegie Mellon University
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of version 2 of the GNU General Public License as published
+# by the Free Software Foundation.  A copy of the GNU General Public License
+# should have been distributed along with this program in the file
+# COPYING.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+# or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+# for more details.
+#
+
+DEVICE=/dev/live
+MOUNTPOINT=/mnt/live
+USERID=500
+GROUPID=500
+
+die() {
+	echo "$1"
+	exit 1
+}
+
+[ `id -u` = 0 ] || die "You must be root."
+[ -e $DEVICE ] || die "$DEVICE not found"
+[ -d $MOUNTPOINT ] || die "$MOUNTPOINT does not exist"
+
+# If the filesystem is already mounted, try unmounting and remounting it.
+if mountpoint -q $MOUNTPOINT ; then
+	umount $MOUNTPOINT || die "Couldn't unmount existing $MOUNTPOINT"
+fi
+
+type=`blkid -o value -s TYPE $DEVICE`
+
+case "$type" in
+vfat)
+	mount -o "uid=$USERID,gid=$GROUPID" $DEVICE $MOUNTPOINT
+	ret=$?
+	;;
+ext2|ext3|ext4)
+	mount $DEVICE $MOUNTPOINT
+	ret=$?
+	;;
+iso9660|udf)
+	echo "Refusing to mount CD-ROM filesystem on $MOUNTPOINT"
+	exit 1
+	;;
+*)
+	echo "Unknown filesystem $type on $DEVICE"
+	exit 1
+	;;
+esac
+
+[ $ret = 0 ] || die "Couldn't mount $DEVICE at $MOUNTPOINT"
+
+exit 0

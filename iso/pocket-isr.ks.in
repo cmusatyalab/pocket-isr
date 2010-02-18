@@ -270,11 +270,16 @@ if [ -f /mnt/live/.openisrrc ] ; then
 	cp /mnt/live/.openisrrc /home/liveuser/.openisrrc
 fi
 
-# If we booted in normal mode from CD, unmount it so that the user can eject
-# the disc, since we know there won't be a hoard cache there
-if strstr "`cat /proc/cmdline`" live_ram && \
-		[ "`/sbin/blkid -s TYPE -o value /dev/live`" = iso9660 ] ; then
-	umount /mnt/live
+# If we booted in normal mode, fix up /mnt/live.  We can't do this in
+# persistent mode because we can't unmount /mnt/live and remounting a VFAT
+# filesystem with different uid/gid parameters has no effect.
+if strstr "`cat /proc/cmdline`" live_ram ; then
+	# If we booted from a VFAT USB device, unmount the volume and
+	# remount it writable by liveuser.  If we booted from CD, unmount it
+	# so the user can eject the disc, since we know there won't be a
+	# hoard cache there.  If we booted from an ext234 USB device, just
+	# unmount and remount /mnt/live.
+	remount_live_volume
 fi
 
 # Disable annoying VirtualBox information dialogs.  These are useful, once,

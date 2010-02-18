@@ -39,6 +39,7 @@ rm -rf $RPM_BUILD_ROOT
 %{_initddir}/early-scratch-setup
 %{_bindir}/check_isr_storage
 %{_sbindir}/gather_free_space
+%{_sbindir}/remount_live_volume
 
 %post
 /sbin/chkconfig --add early-scratch-setup
