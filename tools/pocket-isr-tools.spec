@@ -12,7 +12,12 @@ BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 BuildRequires:  glib2-devel device-mapper-devel libblkid-devel
 BuildRequires:  e2fsprogs-devel ntfsprogs-devel
 
+# For check_isr_storage
 Requires:       libnotify
+# For pocket_isr_update.  -release is required for the GPG key.  gvfs is
+# required for HTTP hyperlinking to work (RH #544119).
+Requires:       notify-python pygtk2 gvfs livecd-tools pocket-isr-release
+Requires:       pygpgme rb_libtorrent-python
 
 %description
 Tools for the Pocket ISR live image, including a utility to collect free
@@ -38,6 +43,7 @@ rm -rf $RPM_BUILD_ROOT
 %doc COPYING
 %{_initddir}/early-scratch-setup
 %{_bindir}/check_isr_storage
+%{_bindir}/pocket_isr_update
 %{_sbindir}/gather_free_space
 %{_sbindir}/remount_live_volume
 

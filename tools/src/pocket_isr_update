@@ -1,0 +1,801 @@
+#!/usr/bin/python
+#
+# pocket_isr_update - Update Pocket ISR to the latest release
+#
+# Copyright (C) 2010 Carnegie Mellon University
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of version 2 of the GNU General Public License as published
+# by the Free Software Foundation.  A copy of the GNU General Public License
+# should have been distributed along with this program in the file
+# COPYING.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+# or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+# for more details.
+#
+
+import dbus
+from dbus.mainloop.glib import DBusGMainLoop
+DBusGMainLoop(set_as_default=True)
+import glib
+import gobject
+gobject.threads_init()
+import gpgme
+import gtk
+import libtorrent
+import os
+import pynotify
+import shutil
+import subprocess
+import sys
+import threading
+import urllib2
+from urllib2 import urlopen, HTTPError, URLError
+import vte
+
+class UpdaterException(Exception):
+	pass
+
+class AboutWindow(gtk.AboutDialog):
+	def __init__(self, updater):
+		gtk.AboutDialog.__init__(self)
+		self.set_name(updater.APP_NAME)
+		self.set_comments(updater.APP_DESC)
+		self.set_copyright(updater.APP_COPYRIGHT)
+		self.set_logo_icon_name(updater.APP_ICON)
+		self.connect('response', self._handle_response)
+		self.connect('delete-event', self._handle_delete)
+
+	def _handle_response(self, obj, response):
+		self.hide()
+
+	def _handle_delete(self, obj, ev):
+		self.hide()
+		return True
+
+class UpdaterDialog(gtk.MessageDialog):
+	def __init__(self, updater, head, parent = None, is_error = False):
+		if is_error:
+			type = 'error'
+		else:
+			type = 'other'
+		gtk.MessageDialog.__init__(self, parent, 0, type, 'none',
+					head)
+		self.set_title(updater.APP_NAME)
+		self.set_skip_taskbar_hint(False)
+		if not is_error:
+			img = gtk.image_new_from_icon_name(updater.APP_ICON,
+						'dialog')
+			img.show()
+			self.set_image(img)
+		if '_handle_response' in dir(self):
+			self.connect('response', self._handle_response)
+		if '_handle_delete' in dir(self):
+			self.connect('delete-event', self._handle_delete)
+		self.updater = updater
+
+	def hide(self):
+		gtk.MessageDialog.hide(self)
+		self.updater.show_icon()
+
+class InfoDialog(UpdaterDialog):
+	def __init__(self, updater, msg, parent = None):
+		UpdaterDialog.__init__(self, updater, 'Error',
+					is_error = True, parent = parent)
+		self.format_secondary_text(msg)
+		self.add_button(gtk.STOCK_OK, gtk.RESPONSE_OK)
+		self.show_all()
+
+	def _handle_response(self, obj, response):
+		self.destroy()
+
+class FatalDialog(UpdaterDialog):
+	def __init__(self, updater, msg, parent = None):
+		UpdaterDialog.__init__(self, updater, 'Fatal error',
+					is_error = True, parent = parent)
+		self.format_secondary_text(msg)
+		self.add_button(gtk.STOCK_QUIT, gtk.RESPONSE_ACCEPT)
+		self.run()
+		sys.exit(1)
+
+class UpdateDialog(UpdaterDialog):
+	def __init__(self, updater):
+		# We would like this text to be the same as in the
+		# UpdateNotifier, but URL markup in the secondary text
+		# causes gtk to go into an infinite loop.  Put the release
+		# notes link in a LinkButton instead.
+		(head, body, url) = updater.get_update_messages()
+		UpdaterDialog.__init__(self, updater, head)
+		self.set_title('Update available')
+		self.format_secondary_text(body)
+		relnotes = gtk.LinkButton(url, 'Release notes')
+		relnotes.show()
+		self.get_action_area().pack_start(relnotes)
+		self.add_buttons('Update Later', gtk.RESPONSE_REJECT,
+					'Update Now', gtk.RESPONSE_ACCEPT)
+		self.set_default_response(gtk.RESPONSE_REJECT)
+
+	def _handle_response(self, obj, response):
+		self.hide()
+		if response == gtk.RESPONSE_ACCEPT:
+			self.updater.set_state(self.updater.UPDATING)
+
+	def _handle_delete(self, obj, ev):
+		self.hide()
+		return True
+
+class RestartDialog(UpdaterDialog):
+	def __init__(self):
+		UpdaterDialog.__init__(self, updater, 'Restart required')
+		self.set_title('Restart required')
+		self.format_secondary_text('You must restart your system ' +
+					'to use the updated version of ' +
+					'Pocket ISR.\n\nBe sure to suspend ' +
+					'and check in your parcels before ' +
+					'restarting.')
+		self.add_buttons('Restart Later', gtk.RESPONSE_REJECT,
+				'Restart Now', gtk.RESPONSE_ACCEPT)
+
+	def _handle_response(self, obj, response):
+		self.hide()
+		if response == gtk.RESPONSE_ACCEPT:
+			bus = dbus.SystemBus()
+			ck = bus.get_object('org.freedesktop.ConsoleKit',
+					'/org/freedesktop/ConsoleKit/Manager')
+			ck.Restart(dbus_interface =
+					'org.freedesktop.ConsoleKit.Manager')
+
+	def _handle_delete(self, obj, ev):
+		self.hide()
+		return True
+
+class UpdateWindow(gtk.Window):
+	FONT = 'Monospace 9'
+
+	def __init__(self, updater):
+		gtk.Window.__init__(self)
+		self.set_title(updater.APP_NAME)
+		self.set_border_width(5)
+		self.set_resizable(False)
+		self.set_deletable(False)
+		accels = gtk.AccelGroup()
+		self.add_accel_group(accels)
+		self.connect('delete-event', lambda wid, ev: True)
+
+		box = gtk.VBox(False, 5)
+		box.set_border_width(5)
+
+		headerbox = gtk.HBox(False, 5)
+		img = gtk.image_new_from_icon_name(updater.APP_ICON, 'dialog')
+		headerbox.pack_start(img)
+		# Prevent the header text from hugging the icon
+		spacer = gtk.Alignment()
+		spacer.set_size_request(2, 0)
+		headerbox.pack_start(spacer)
+		labelbox = gtk.VBox(False, 5)
+		msg = gtk.Label()
+		msg.set_markup('<span size="large" weight="bold">' +
+				'Updating Pocket ISR...</span>')
+		msg.set_alignment(0, 0)
+		labelbox.pack_start(msg)
+		msg = gtk.Label('Do not restart the system or unplug your ' +
+				'USB device until the update is complete.')
+		msg.set_alignment(0, 0)
+		labelbox.pack_start(msg)
+		headerbox.pack_start(labelbox)
+		box.pack_start(headerbox, padding = 5)
+
+		self.label = gtk.Label('Initializing...')
+		self.label.set_alignment(0, 0.5)
+		box.pack_start(self.label)
+
+		self.progress = gtk.ProgressBar()
+		self.progress.pulse()
+		self.pulse = True
+		glib.timeout_add(400, self._progress_handler)
+		box.pack_start(self.progress)
+
+		def make_label(box, text):
+			lbl = gtk.Label(text)
+			lbl.set_alignment(0, 0.5)
+			box.pack_start(lbl)
+			return lbl
+		ratebox = gtk.HBox(True, 5)
+		self.download = make_label(ratebox, 'Download:')
+		self.upload = make_label(ratebox, 'Upload:')
+		box.pack_start(ratebox)
+
+		# Add a space between the download/upload labels and the
+		# details expander
+		spacer = gtk.Alignment()
+		spacer.set_size_request(0, 2)
+		box.pack_start(spacer)
+
+		expander = gtk.Expander('Details')
+		expander.set_spacing(2)
+		self.term = vte.Terminal()
+		self.term.set_font_from_string(self.FONT)
+		self.term.connect('key-press-event', lambda wid, ev: False)
+		self.term.connect('child-exited', self._exit_handler)
+		scroll = gtk.VScrollbar()
+		scroll.set_adjustment(self.term.get_adjustment())
+		termbox = gtk.HBox()
+		termbox.pack_start(self.term)
+		termbox.pack_start(scroll)
+		expander.add(termbox)
+		box.pack_start(expander)
+
+		buttonbox = gtk.HButtonBox()
+		buttonbox.set_layout('end')
+		self.cancel = gtk.Button(stock = gtk.STOCK_CANCEL)
+		self.cancel.add_accelerator('activate', accels,
+				gtk.gdk.keyval_from_name('Escape'), 0, 0)
+		self.cancel.connect('clicked', self._cancel_handler)
+		self.cancel.set_sensitive(False)
+		buttonbox.add(self.cancel)
+		box.pack_start(buttonbox)
+
+		self.add(box)
+		self.show_all()
+		self.hide()
+
+	def next_phase(self, status):
+		# Automatically clears the cancel callback and sets the
+		# progress bar to pulse mode.  The first call to
+		# set_progress() will switch back to progress mode.
+		self.set_status(status)
+		self.cancel_callback = None
+		self.cancel.set_sensitive(False)
+		self.pulse = True
+		self.progress.set_text('')
+		self.progress.pulse()
+
+	def set_status(self, status):
+		if self.label.get_text() == status:
+			return
+		self.label.set_text(status)
+		self.term.feed(status + '\r\n')
+
+	def set_cancel(self, callback):
+		self.cancel_callback = callback
+		self.cancel.set_sensitive(callback is not None)
+
+	def set_progress(self, fraction, text):
+		if text is None:
+			text = ''
+		self.pulse = False
+		self.progress.set_text(text)
+		self.progress.set_fraction(fraction)
+
+	def set_rates(self, download, upload):
+		to_str = lambda title, bps: '{0}: {1} KiB/s'.format(
+					title, round(bps / 1024, 1))
+		self.download.set_text(to_str('Download', download))
+		self.upload.set_text(to_str('Upload', upload))
+
+	def run_command(self, cmd, exit_callback):
+		self.exit_callback = exit_callback
+		return self.term.fork_command(cmd[0], cmd)
+
+	def _progress_handler(self):
+		if self.pulse:
+			self.progress.pulse()
+		return True
+
+	def _cancel_handler(self, wid):
+		if self.cancel_callback is not None:
+			self.cancel_callback()
+
+	def _exit_handler(self, wid):
+		if self.exit_callback is not None:
+			ret = self.term.get_child_exit_status()
+			callback = self.exit_callback
+			self.exit_callback = None
+			callback(ret)
+
+class Notifier(object):
+	def __init__(self, updater):
+		self.updater = updater
+
+		self.icon_menu = gtk.Menu()
+		item = gtk.MenuItem('About')
+		item.connect('activate', lambda x: self.updater.show_about())
+		self.icon_menu.attach(item, 0, 1, 0, 1)
+		self.icon_menu.show_all()
+
+		# We want the icon to start out hidden, but creating it
+		# and immediately hiding it causes glitches in the status
+		# area (since it's not part of our main loop).  Defer
+		# creation until the first show().
+		self.icon = None
+
+	def _create(self):
+		self.icon = gtk.status_icon_new_from_icon_name(self.ICON)
+		self.icon.set_tooltip(self.tooltip)
+		self.icon.connect('activate', lambda x:
+					self.updater.show_window())
+		self.icon.connect('popup-menu', lambda icon, btn, tm:
+					self.icon_menu.popup(None, None,
+					gtk.status_icon_position_menu, btn,
+					tm, icon))
+
+	def hide(self):
+		self.icon.set_visible(False)
+
+	def show(self):
+		if self.icon is None:
+			self._create()
+		self.icon.set_visible(True)
+
+class UpdateNotifier(Notifier):
+	ICON = 'software-update-available'
+	POPUP_TIMEOUT = 15000
+	IGNOREFILE = '.pocket-isr-update-ignore'
+
+	def __init__(self, updater, available):
+		if not pynotify.init(updater.APP_NAME):
+			raise UpdaterException("Couldn't initialize pynotify")
+		Notifier.__init__(self, updater)
+		self.available = available
+		self.tooltip = 'Pocket ISR {0} available'.format(available)
+		self.popup = None
+
+		prefdir = updater.get_pref_dir()
+		if prefdir is not None:
+			self.ignorepath = os.path.join(prefdir,
+						self.IGNOREFILE)
+		else:
+			self.ignorepath = None
+		self.ignore = self._read_ignore()
+
+	def _read_ignore(self):
+		for d in self.updater.get_pref_dirs():
+			path = os.path.join(d, self.IGNOREFILE)
+			try:
+				result = file(path).read().strip()
+			except:
+				pass
+			else:
+				return result
+		return None
+
+	def notify(self):
+		if self.ignore == 'always' or self.ignore == self.available:
+			# User doesn't want to be notified about this update
+			return
+
+		if self.popup is not None:
+			# Don't show more than one at a time
+			return
+
+		(head, body, url) = self.updater.get_update_messages()
+		body += ('\nThe release notes are available ' +
+				'<a href="{0}">here</a>.').format(url)
+		self.popup = pynotify.Notification(head, body,
+					self.updater.APP_ICON)
+		self.popup.set_timeout(self.POPUP_TIMEOUT)
+		self.popup.set_urgency(pynotify.URGENCY_LOW)
+		self.popup.attach_to_status_icon(self.icon)
+		self.popup.add_action('default', 'OK', self._popup_action)
+		# Show the update action even if the device has been
+		# removed, so that we have a chance to post an explanatory
+		# error dialog
+		self.popup.add_action('update', 'Update', self._popup_action)
+		if self.ignorepath is not None:
+			self.popup.add_action('ignore', 'Ignore this update',
+						self._popup_action)
+		self.popup.connect('closed', self._popup_closed)
+		self.popup.show()
+
+	def _popup_action(self, n, action):
+		if action == 'update':
+			self.updater.set_state(self.updater.UPDATING)
+		elif action == 'ignore':
+			self.ignore = self.available
+			try:
+				f = file(self.ignorepath, 'w')
+				f.write(self.available + '\n')
+				f.close()
+			except:
+				pass
+		n.close()
+
+	def _popup_closed(self, n):
+		self.popup = None
+
+	def hide(self):
+		Notifier.hide(self)
+		if self.popup is not None:
+			self.popup.close()
+
+class RestartNotifier(Notifier):
+	ICON = 'view-refresh'
+	tooltip = 'Restart required'
+
+class UpdateRunner(object):
+	BASE_URL = 'http://isr.cmu.edu/software/pocket-isr/images/'
+	BASE_NAME = 'Pocket-ISR-{0}'
+	VERIFY_KEY = '/etc/pki/rpm-gpg/RPM-GPG-KEY-pocket-isr'
+	TIMEOUT = 30
+
+	def __init__(self, updater, window, available):
+		self.updater = updater
+		self.window = window
+
+		self.base_name = self.BASE_NAME.format(available)
+		self.dir = os.path.join(os.getenv('HOME'),
+					'.pocket-isr-update')
+		if not os.path.exists(self.dir):
+			os.mkdir(self.dir)
+		self.torrent_url = '{u}/{n}/{n}.torrent'.format(
+					u = self.BASE_URL, n = self.base_name)
+		self.iso_path = os.path.join(self.dir, self.base_name,
+					self.base_name + '.iso')
+		self.gpg_path = os.path.join(self.dir, self.base_name,
+					self.base_name + '.iso.gpg')
+
+		self.sesn = self.torr = None
+		glib.idle_add(self._check_prereqs)
+
+	def _check_prereqs(self):
+		err = None
+		boot_opts = file('/proc/cmdline').read().split()
+		if 'live_ram' not in boot_opts:
+			err = ('Cannot perform update while using ' +
+					'persistent home directory.  ' +
+					'Reboot into transient mode to ' +
+					'update Pocket ISR.')
+		elif not self.updater.device_is_accessible():
+			err = ('Cannot write to the USB device.  ' +
+					'Is it plugged in?')
+		if err is not None:
+			InfoDialog(self.updater, err)
+			self._bailout()
+			return
+		self.window.present()
+		glib.idle_add(self._download_start)
+
+	def _download_start(self):
+		self.window.next_phase('Downloading update: Preparing...')
+		self.cancel = False
+		self.window.set_cancel(self._download_cancel)
+
+		err = None
+		try:
+			i = urlopen(self.torrent_url, timeout = self.TIMEOUT)
+			metadata = i.read()
+			i.close()
+		except URLError, e:
+			err = ("Couldn't download update metadata: " +
+						e.reason[1])
+		except HTTPError, e:
+			err = ("Couldn't download update metadata: " +
+						"server returned " +
+						str(e.code))
+		if err != None:
+			InfoDialog(self.updater, err, self.window)
+			self._bailout()
+			return
+
+		self.sesn = libtorrent.session()
+		self.sesn.listen_on(6881, 6999)
+		self.sesn.start_lsd()
+		self.sesn.start_upnp()
+		self.sesn.start_natpmp()
+		tree = libtorrent.bdecode(metadata)
+		info = libtorrent.torrent_info(tree)
+		self.torr = self.sesn.add_torrent(info, self.dir)
+
+		self.dead = False
+		self._download_check()
+		self._torrent_status()
+		glib.timeout_add(400, self._download_check)
+		glib.timeout_add(400, self._torrent_status)
+
+	def _download_check(self):
+		# Runs until the download is complete
+		if self.dead:
+			return False
+		if self.cancel:
+			self._bailout()
+			return False
+		if self.torr.is_seed():
+			self._verify()
+			return False
+
+		stat = self.torr.status()
+		if stat.state == 1 or stat.state == 3:
+			if stat.state == 1:
+				task = 'Checking'
+				text = None
+			else:
+				task = 'Downloading'
+				text = '{0}/{1} MiB'.format(
+						stat.total_wanted_done >> 20,
+						stat.total_wanted >> 20)
+			self.window.set_status('Downloading update: {0}...'.
+						format(task))
+			self.window.set_progress(stat.progress, text)
+		return True
+
+	def _download_cancel(self):
+		self.cancel = True
+
+	def _torrent_status(self):
+		# Runs until the update is complete, since we're still
+		# uploading in the background
+		if self.dead:
+			return False
+
+		alert = self.sesn.pop_alert()
+		while alert is not None:
+			# None of the alerts seem to be things the user
+			# needs to see, but we might as well log them to
+			# stdout
+			print alert.message()
+			alert = self.sesn.pop_alert()
+
+		stat = self.torr.status()
+		if self.torr.is_seed():
+			# The download speed reported by libtorrent takes a
+			# while to decay, which looks odd.  Force it to zero
+			# after we finish downloading.
+			down = 0
+		else:
+			down = stat.download_payload_rate
+		self.window.set_rates(down, stat.upload_payload_rate)
+
+		return True
+
+	def _verify(self):
+		self.window.next_phase('Verifying update...')
+		thr = threading.Thread(target = self._verify_runner)
+		thr.daemon = True
+		thr.start()
+
+	def _verify_runner(self):
+		try:
+			# gpgme doesn't just load the keys into memory, but
+			# actually creates GPG keyring files.  Put these into
+			# our temporary directory.  Note that this method
+			# may be run more than once, and subsequent key
+			# imports will skip the key since it is already in
+			# the keyring.
+			os.putenv('GNUPGHOME', self.dir)
+			ctx = gpgme.Context()
+			kf = file(self.VERIFY_KEY)
+			ctx.import_(kf)
+			sig = file(self.gpg_path)
+			data = file(self.iso_path, 'rb')
+			# gpgme doesn't report the total length correctly,
+			# so we have to do it ourselves
+			data.seek(0, 2)
+			self.total = data.tell()
+			data.seek(0, 0)
+			ctx.progress_cb = self._verify_progress
+			result = ctx.verify(sig, data, None)
+			if len(result) != 1 or result[0].status is not None:
+				raise UpdaterException('Signature ' +
+						'verification failed.')
+		except Exception, e:
+			glib.idle_add(self._verify_fail, str(e))
+		else:
+			glib.idle_add(self._unmount)
+
+	def _verify_progress(self, what, type, current, total):
+		# Runs in verify thread.  Conveniently, total is always 0.
+		glib.idle_add(self.window.set_progress,
+				float(current) / self.total, None)
+
+	def _verify_fail(self, error):
+		InfoDialog(self.updater, error, self.window)
+		self._bailout()
+
+	def _unmount(self):
+		self.window.next_phase('Unmounting USB device...')
+		self.window.run_command(['su', '-c', 'umount ' +
+					self.updater.DEVICEDIR], self._update)
+
+	def _update(self, status):
+		if status != 0:
+			InfoDialog(self.updater,
+					"Couldn't unmount USB device.",
+					self.window)
+			self._bailout()
+			return
+		self.window.next_phase('Installing update...')
+		self.window.run_command(['su', '-c', 'livecd-iso-to-disk ' +
+					'--noverify ' + self.iso_path + ' ' +
+					self.updater.DEVICENODE],
+					self._remount)
+
+	def _remount(self, status):
+		if status != 0:
+			FatalDialog(self.updater, "Couldn't write new " +
+					"image to disk.", self.window)
+		self.window.next_phase('Remounting USB device...')
+		self.window.run_command(['su', '-c', 'remount_live_volume'],
+					self._cleanup)
+
+	def _cleanup(self, status):
+		if status != 0:
+			InfoDialog(self.updater,
+					"Couldn't remount USB device.",
+					self.window)
+		shutil.rmtree(self.dir, ignore_errors = True)
+		self._bailout(next_state = self.updater.NEED_RESTART)
+
+	def _bailout(self, next_state = None):
+		if next_state is None:
+			next_state = self.updater.NEED_UPDATE
+		# Hide window to obscure any delays in the next step
+		self.window.hide()
+		# Destroy torrent session, unregister from tracker.
+		# This can take a while.
+		if self.sesn is not None and self.torr is not None:
+			self.sesn.remove_torrent(self.torr)
+		# Kill timers.
+		self.dead = True
+		self.updater.set_state(next_state)
+
+class PocketISRUpdater(object):
+	APP_NAME = 'Pocket ISR Update'
+	APP_DESC = 'Application for updating Pocket ISR to the newest version'
+	APP_COPYRIGHT = 'Copyright \xc2\xa9 2010 Carnegie Mellon University'
+	APP_ICON = 'system-software-update'
+
+	VERFILE = '/etc/pocket-isr-release'
+	DEVICENODE = '/dev/live'
+	DEVICEDIR = '/mnt/live'
+	VERSION_URL = 'http://isr.cmu.edu/software/pocket-isr/VERSION'
+	CHANGES_URL = 'http://isr.cmu.edu/pocket-isr/changes'
+	NETWORK_DELAY = 3000
+
+	INITIALIZING = 0
+	QUERYING = 1
+	NEED_UPDATE = 2
+	UPDATING = 3
+	NEED_RESTART = 4
+
+	def __init__(self):
+		gtk.window_set_default_icon_name(self.APP_ICON)
+
+		if not os.path.exists(self.VERFILE):
+			raise UpdaterException('{0} not found'.format(
+						self.VERFILE))
+		self.current = file(self.VERFILE).read().strip()
+		self.available = None
+		self.state = self.INITIALIZING
+		self.about = AboutWindow(self)
+		self.window = None
+		self.notifier = None
+		self.have_notified = False
+
+		bus = dbus.SystemBus()
+		self.nm = bus.get_object('org.freedesktop.NetworkManager',
+				'/org/freedesktop/NetworkManager')
+		self.nm.connect_to_signal('StateChanged',
+				self._handle_nm_state, dbus_interface =
+				'org.freedesktop.NetworkManager')
+
+		glib.idle_add(self.set_state, self.QUERYING)
+
+	def set_state(self, state):
+		if self.state == state:
+			return
+		if self.window is not None:
+			self.window.destroy()
+			self.window = None
+		if self.notifier is not None:
+			self.notifier.hide()
+			self.notifier = None
+		if state == self.QUERYING:
+			if self.nm.Get('org.freedesktop.NetworkManager',
+					'State', dbus_interface =
+					dbus.PROPERTIES_IFACE) == 3:
+				# Network is connected
+				self._query()
+		elif state == self.NEED_UPDATE:
+			# We may come back here from UPDATING if the user
+			# cancels
+			self.window = UpdateDialog(self)
+			self.notifier = UpdateNotifier(self, self.available)
+			self.notifier.show()
+			if not self.have_notified:
+				self.notifier.notify()
+				self.have_notified = True
+		elif state == self.UPDATING:
+			self.window = UpdateWindow(self)
+			UpdateRunner(self, self.window, self.available)
+		elif state == self.NEED_RESTART:
+			self.window = RestartDialog()
+			self.window.present()
+			self.notifier = RestartNotifier(self)
+		self.state = state
+
+	def _handle_nm_state(self, state):
+		if state == 3:
+			# We just got a network connection.  Sadly this
+			# doesn't necessarily mean that the network works
+			# yet, so add a delay.
+			if self.state == self.QUERYING:
+				glib.timeout_add(self.NETWORK_DELAY,
+							self._query)
+
+	def _query(self):
+		if self.available is not None:
+			return
+		try:
+			f = urlopen(self.VERSION_URL)
+			self.available = f.read().strip()
+			f.close()
+			if self.available == self.current:
+				gtk.main_quit()
+			else:
+				self.set_state(self.NEED_UPDATE)
+		except URLError, e:
+			# If there's a DNS error the first time we try, we
+			# will continually end up back here unless nscd is
+			# running (RH#442172).  We could also solve this by
+			# trying to call glibc's res_init() from Python,
+			# but that's uglier.
+			print "Couldn't fetch current version: " + \
+				e.reason[1]
+		except HTTPError, e:
+			print "Couldn't fetch current version: " + \
+				"server returned " + str(e.code)
+
+	def get_update_messages(self):
+		head = 'New Pocket ISR release'
+		body = 'Pocket ISR version {0} is now available.'.format(
+				self.available)
+		return (head, body, self.CHANGES_URL)
+
+	def device_is_accessible(self):
+		return (os.path.exists(self.DEVICENODE) and
+				os.path.ismount(self.DEVICEDIR) and
+				os.access(self.DEVICEDIR, os.W_OK))
+
+	def get_pref_dirs(self):
+		# Return a list of all possible places preference data might
+		# previously have been written.
+		return (os.getenv('HOME'), self.DEVICEDIR)
+
+	def get_pref_dir(self):
+		# Returns the place to write preference data.
+		proc = subprocess.Popen(['check_isr_storage', '-q'],
+					stdout = subprocess.PIPE)
+		mode = proc.communicate()[0].strip()
+		if mode == 'transient' and self.device_is_accessible():
+			# Booted in normal mode and the device directory is
+			# writable
+			return self.DEVICEDIR
+		elif mode == 'persistent':
+			# Booted in persistent mode
+			return os.getenv('HOME')
+		else:
+			# Can't find anywhere to write preference data
+			return None
+
+	def show_about(self):
+		self.about.present()
+
+	def show_window(self):
+		self.window.present()
+		if self.notifier is not None:
+			self.notifier.hide()
+
+	def show_icon(self):
+		if self.notifier is not None:
+			self.notifier.show()
+
+if __name__ == '__main__':
+	updater = PocketISRUpdater()
+	try:
+		gtk.main()
+	except KeyboardInterrupt:
+		pass
+	except Exception, e:
+		FatalDialog(updater, str(e))
