@@ -417,6 +417,16 @@ if [ -f /mnt/live/.openisrrc ] ; then
 	cp /mnt/live/.openisrrc /home/liveuser/.openisrrc
 fi
 
+# If we booted from CD rather than a USB device, record this so Pocket ISR
+# Update won't prompt to rewrite the device.  We need to do this now because
+# once the device disappears, we won't otherwise know whether the user removed
+# their USB device or ejected the disc.
+case "`blkid -o value -s TYPE /dev/live`" in
+iso9660|udf)
+	touch /var/run/pocket-isr-on-cd
+	;;
+esac
+
 # If we booted in normal mode, fix up /mnt/live.  We can't do this in
 # persistent mode because we can't unmount /mnt/live and remounting a VFAT
 # filesystem with different uid/gid parameters has no effect.
