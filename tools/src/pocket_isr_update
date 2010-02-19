@@ -361,7 +361,7 @@ class UpdateNotifier(Notifier):
 				return result
 		return None
 
-	def notify(self):
+	def notify(self, allow_update):
 		if self.ignore == 'always' or self.ignore == self.available:
 			# User doesn't want to be notified about this update
 			return
@@ -377,12 +377,12 @@ class UpdateNotifier(Notifier):
 					self.updater.APP_ICON)
 		self.popup.set_timeout(self.POPUP_TIMEOUT)
 		self.popup.set_urgency(pynotify.URGENCY_LOW)
-		self.popup.attach_to_status_icon(self.icon)
+		if self.icon is not None:
+			self.popup.attach_to_status_icon(self.icon)
 		self.popup.add_action('default', 'OK', self._popup_action)
-		# Show the update action even if the device has been
-		# removed, so that we have a chance to post an explanatory
-		# error dialog
-		self.popup.add_action('update', 'Update', self._popup_action)
+		if allow_update:
+			self.popup.add_action('update', 'Update',
+						self._popup_action)
 		if self.ignorepath is not None:
 			self.popup.add_action('ignore', 'Ignore this update',
 						self._popup_action)
@@ -654,6 +654,7 @@ class PocketISRUpdater(object):
 	APP_ICON = 'system-software-update'
 
 	VERFILE = '/etc/pocket-isr-release'
+	CDFLAG = '/var/run/pocket-isr-on-cd'
 	DEVICENODE = '/dev/live'
 	DEVICEDIR = '/mnt/live'
 	VERSION_URL = 'http://isr.cmu.edu/software/pocket-isr/VERSION'
@@ -674,6 +675,7 @@ class PocketISRUpdater(object):
 						self.VERFILE))
 		self.current = file(self.VERFILE).read().strip()
 		self.available = None
+		self.on_cd = os.path.exists(self.CDFLAG)
 		self.state = self.INITIALIZING
 		self.about = AboutWindow(self)
 		self.window = None
@@ -709,10 +711,22 @@ class PocketISRUpdater(object):
 			# cancels
 			self.window = UpdateDialog(self)
 			self.notifier = UpdateNotifier(self, self.available)
-			self.notifier.show()
-			if not self.have_notified:
-				self.notifier.notify()
-				self.have_notified = True
+			# If there's any chance of updating the device, we
+			# show the status icon and the update action in the
+			# notification popup.  If update is currently not
+			# possible, we explain this to the user once they try.
+			# (The idea is to make the update functionality more
+			# discoverable.)  However, if we booted from CD
+			# there's no way to update automatically, so don't
+			# present the user with false hope.
+			if self.on_cd:
+				self.notifier.notify(False)
+				gtk.main_quit()
+			else:
+				self.notifier.show()
+				if not self.have_notified:
+					self.notifier.notify(True)
+					self.have_notified = True
 		elif state == self.UPDATING:
 			self.window = UpdateWindow(self)
 			UpdateRunner(self, self.window, self.available)
