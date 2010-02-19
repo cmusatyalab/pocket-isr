@@ -1,7 +1,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.63])
-AC_INIT([pocket-isr-tools], [1.0.2], [isr@cs.cmu.edu])
+AC_INIT([pocket-isr-tools], [1.1], [isr@cs.cmu.edu])
 AC_CONFIG_AUX_DIR([build-aux])
 AM_INIT_AUTOMAKE([foreign silent-rules 1.11])
 AC_COPYRIGHT([Copyright (C) 2009 Carnegie Mellon University])

@@ -1,5 +1,5 @@
 Name:           pocket-isr-tools
-Version:        1.0.2
+Version:        1.1
 Release:        1%{?dist}
 Summary:        Tools for Pocket ISR live image
 
@@ -54,6 +54,11 @@ rm -rf $RPM_BUILD_ROOT
 /sbin/chkconfig --del early-scratch-setup
 
 %changelog
+* Fri Feb 19 2010 Benjamin Gilbert <bgilbert@cs.cmu.edu> - 1.1-1
+- Add Pocket ISR Update application
+- Add remount_live_volume script to mount /mnt/live with proper permissions
+- Add -q option to check_isr_storage
+
 * Wed Jan 20 2010 Benjamin Gilbert <bgilbert@cs.cmu.edu> - 1.0.2-1
 - Add license block to early-scratch-setup script
 
