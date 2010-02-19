@@ -15,7 +15,7 @@
 Summary: 	VirtualBox OSE
 Name: 		virtualbox-ose-3.0
 Version: 	3.0.12
-Release: 	2%{?dist}
+Release: 	3%{?dist}
 Group: 		Applications/System
 License:	GPLv2 and (GPLv2 or CDDL)
 
@@ -203,6 +203,10 @@ for m in vboxdrv vboxnetflt vboxnetadp; do
 done
 
 %changelog
+* Fri Feb 19 2010 Benjamin Gilbert <bgilbert@cs.cmu.edu> - 3.0.12-3
+- Fix FTBFS if kernel sources are not available
+- Fix install failure with livecd-creator if VirtualBox is running
+
 * Wed Jan 20 2010 Benjamin Gilbert <bgilbert@cs.cmu.edu> - 3.0.12-2
 - Minor cleanup to build script
 
