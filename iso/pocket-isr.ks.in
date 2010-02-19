@@ -220,6 +220,151 @@ wallpaper=/usr/share/backgrounds/isr/standard.png
 show_wallpaper=1
 EOF
 
+# Configure desktop panel for newly-created accounts
+mkdir -p /etc/skel/.config/lxpanel/LXDE/panels
+cat > /etc/skel/.config/lxpanel/LXDE/panels/panel <<EOF
+Global {
+    edge=bottom
+    allign=left
+    margin=0
+    widthtype=percent
+    width=100
+    height=26
+    transparent=0
+    tintcolor=#000000
+    alpha=0
+    autohide=0
+    heightwhenhidden=2
+    setdocktype=1
+    setpartialstrut=1
+    usefontcolor=0
+    fontcolor=#ffffff
+    background=0
+    backgroundfile=/usr/share/lxpanel/images/background.png
+    iconsize=24
+}
+
+Plugin {
+    type = space
+    Config {
+        Size=2
+    }
+}
+
+Plugin {
+    type = menu
+    Config {
+        image=/usr/share/icons/Bluecurve/24x24/apps/icon-panel-menu.png
+        system {
+        }
+        separator {
+        }
+        item {
+            image=gnome-run
+            command=run
+        }
+        separator {
+        }
+        item {
+            image=gnome-logout
+            command=logout
+        }
+    }
+}
+
+Plugin {
+    type = space
+    Config {
+        Size=2
+    }
+}
+
+Plugin {
+    type = launchbar
+    Config {
+        Button {
+            id=/usr/share/applications/fedora-midori.desktop
+        }
+        Button {
+            id=fedora-lxterminal.desktop
+        }
+    }
+}
+
+Plugin {
+    type = space
+    Config {
+        Size=4
+    }
+}
+
+Plugin {
+    type = pager
+}
+
+Plugin {
+    type = space
+    Config {
+        Size=4
+    }
+}
+
+Plugin {
+    type = taskbar
+    expand=1
+    Config {
+        tooltips=1
+        IconsOnly=0
+        ShowAllDesks=0
+        UseMouseWheel=1
+        UseUrgencyHint=1
+        FlatButton=0
+        MaxTaskWidth=150
+        spacing=1
+        GroupedTasks=0
+    }
+}
+
+Plugin {
+    type = tray
+}
+
+Plugin {
+    type = batt
+    Config {
+        HideIfNoBattery=1
+        AlarmCommand=true
+        AlarmTime=5
+        BackgroundColor=black
+        BorderWidth=1
+        ChargingColor1=#28f200
+        ChargingColor2=#22cc00
+        DischargingColor1=#ffee00
+        DischargingColor2=#d9ca00
+        Size=8
+    }
+}
+
+Plugin {
+    type = dclock
+    Config {
+        ClockFmt=%l:%M %p
+        TooltipFmt=%A %x
+        BoldFont=0
+        IconOnly=0
+    }
+}
+
+Plugin {
+    type = launchbar
+    Config {
+        Button {
+            id=lxde-logout.desktop
+        }
+    }
+}
+EOF
+
 # Record Pocket ISR version for pocket_isr_update
 echo "!!VERSION!!" > /etc/pocket-isr-release
 
