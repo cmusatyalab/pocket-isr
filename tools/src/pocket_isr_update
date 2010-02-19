@@ -633,9 +633,13 @@ class UpdateRunner(object):
 		# Hide window to obscure any delays in the next step
 		self.window.hide()
 		# Destroy torrent session, unregister from tracker.
-		# This can take a while.
+		# This can take a while.  We drop our references to the
+		# session and torrent objects to try to force the destructors
+		# to be called now, rather than running later and potentially
+		# causing the restart dialog to become unresponsive.
 		if self.sesn is not None and self.torr is not None:
 			self.sesn.remove_torrent(self.torr)
+		self.sesn = self.torr = None
 		# Kill timers.
 		self.dead = True
 		self.updater.set_state(next_state)
