@@ -630,8 +630,12 @@ class UpdateRunner(object):
 	def _bailout(self, next_state = None):
 		if next_state is None:
 			next_state = self.updater.NEED_UPDATE
+		# Kill timers
+		self.dead = True
 		# Hide window to obscure any delays in the next step
 		self.window.hide()
+		while gtk.events_pending():
+			gtk.main_iteration(False)
 		# Destroy torrent session, unregister from tracker.
 		# This can take a while.  We drop our references to the
 		# session and torrent objects to try to force the destructors
@@ -640,8 +644,7 @@ class UpdateRunner(object):
 		if self.sesn is not None and self.torr is not None:
 			self.sesn.remove_torrent(self.torr)
 		self.sesn = self.torr = None
-		# Kill timers.
-		self.dead = True
+		# Proceed
 		self.updater.set_state(next_state)
 
 class PocketISRUpdater(object):
