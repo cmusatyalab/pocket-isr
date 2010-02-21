@@ -706,6 +706,7 @@ class PocketISRUpdater(object):
 	def set_state(self, state):
 		if self.state == state:
 			return
+		self.state = state
 		if self.window is not None:
 			self.window.destroy()
 			self.window = None
@@ -746,7 +747,6 @@ class PocketISRUpdater(object):
 			self.window = RestartDialog()
 			self.window.present()
 			self.notifier = RestartNotifier(self)
-		self.state = state
 
 	def _handle_nm_state(self, state):
 		if state == 3:
