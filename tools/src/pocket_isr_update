@@ -33,6 +33,7 @@ import shutil
 import subprocess
 import sys
 import threading
+import urllib
 import urllib2
 from urllib2 import urlopen, HTTPError, URLError
 import vte
@@ -115,9 +116,10 @@ class UpdateDialog(UpdaterDialog):
 		UpdaterDialog.__init__(self, updater, head)
 		self.set_title('Update available')
 		self.format_secondary_text(body)
-		relnotes = gtk.LinkButton(url, 'Release notes')
-		relnotes.show()
-		self.get_action_area().pack_start(relnotes)
+		if url is not None:
+			relnotes = gtk.LinkButton(url, 'Release notes')
+			relnotes.show()
+			self.get_action_area().pack_start(relnotes)
 		self.add_buttons('Update Later', gtk.RESPONSE_REJECT,
 					'Update Now', gtk.RESPONSE_ACCEPT)
 		self.set_default_response(gtk.RESPONSE_REJECT)
@@ -376,8 +378,9 @@ class UpdateNotifier(Notifier):
 			return
 
 		(head, body, url) = self.updater.get_update_messages()
-		body += ('\nThe release notes are available ' +
-				'<a href="{0}">here</a>.').format(url)
+		if url is not None:
+			body += ('\nThe release notes are available ' +
+					'<a href="{0}">here</a>.').format(url)
 		self.popup = pynotify.Notification(head, body,
 					self.updater.APP_ICON)
 		self.popup.set_timeout(self.POPUP_TIMEOUT)
@@ -663,7 +666,6 @@ class PocketISRUpdater(object):
 	DEVICENODE = '/dev/live'
 	DEVICEDIR = '/mnt/live'
 	INFO_URL = 'http://isr.cmu.edu/pocket-isr/info'
-	CHANGES_URL = 'http://isr.cmu.edu/pocket-isr/changes'
 	NETWORK_DELAY = 3000
 	QUERY_INTERVAL = 300 * 1000
 
@@ -802,7 +804,13 @@ class PocketISRUpdater(object):
 		head = 'New Pocket ISR release'
 		body = 'Pocket ISR version {0} is now available.'.format(
 				self.available)
-		return (head, body, self.CHANGES_URL)
+		try:
+			# Quote the URL to prevent the server from
+			# injecting HTML into the notification popup
+			url = urllib.quote(self.info['Changes'], '/:')
+		except KeyError:
+			url = None
+		return (head, body, url)
 
 	def device_is_accessible(self):
 		return (os.path.exists(self.DEVICENODE) and
