@@ -423,8 +423,6 @@ class RestartNotifier(Notifier):
 	tooltip = 'Restart required'
 
 class UpdateRunner(object):
-	BASE_URL = 'http://isr.cmu.edu/software/pocket-isr/images/'
-	BASE_NAME = 'Pocket-ISR-{0}'
 	VERIFY_KEY = '/etc/pki/rpm-gpg/RPM-GPG-KEY-pocket-isr'
 	TIMEOUT = 30
 
@@ -432,17 +430,10 @@ class UpdateRunner(object):
 		self.updater = updater
 		self.window = window
 
-		self.base_name = self.BASE_NAME.format(available)
 		self.dir = os.path.join(os.getenv('HOME'),
 					'.pocket-isr-update')
 		if not os.path.exists(self.dir):
 			os.mkdir(self.dir)
-		self.torrent_url = '{u}/{n}/{n}.torrent'.format(
-					u = self.BASE_URL, n = self.base_name)
-		self.iso_path = os.path.join(self.dir, self.base_name,
-					self.base_name + '.iso')
-		self.gpg_path = os.path.join(self.dir, self.base_name,
-					self.base_name + '.iso.gpg')
 
 		self.sesn = self.torr = None
 		glib.idle_add(self._check_prereqs)
@@ -460,6 +451,18 @@ class UpdateRunner(object):
 					'Is it plugged in?')
 		if err is not None:
 			InfoDialog(self.updater, err)
+			self._bailout()
+			return
+		try:
+			info = self.updater.get_info()
+			self.torrent_url = info['Torrent']
+			self.iso_path = os.path.join(self.dir,
+						info['ISOPath'])
+			self.gpg_path = os.path.join(self.dir,
+						info['GPGPath'])
+		except KeyError, e:
+			InfoDialog(self.updater, 'Malformed info file: ' +
+					'no such key {0}'.format(e))
 			self._bailout()
 			return
 		self.window.present()
@@ -615,8 +618,8 @@ class UpdateRunner(object):
 			return
 		self.window.next_phase('Installing update...')
 		self.window.run_command(['su', '-c', 'livecd-iso-to-disk ' +
-					'--noverify ' + self.iso_path + ' ' +
-					self.updater.DEVICENODE],
+					"--noverify '" + self.iso_path +
+					"' " + self.updater.DEVICENODE],
 					self._remount)
 
 	def _remount(self, status):
@@ -799,6 +802,13 @@ class PocketISRUpdater(object):
 		# but signed image that has security flaws
 		if LooseVersion(self.current) >= self.available:
 			raise SystemUpToDate()
+
+	def get_info(self):
+		# Returns key/value pairs from the INFO file fetched from
+		# the Web.  Note that values may be supplied by a malicious
+		# server, malicious proxy, etc., so due paranoia should
+		# be applied.
+		return self.info
 
 	def get_update_messages(self):
 		head = 'New Pocket ISR release'
