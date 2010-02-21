@@ -19,6 +19,7 @@
 import dbus
 from dbus.mainloop.glib import DBusGMainLoop
 DBusGMainLoop(set_as_default=True)
+from distutils.version import LooseVersion
 import glib
 import gobject
 gobject.threads_init()
@@ -27,6 +28,7 @@ import gtk
 import libtorrent
 import os
 import pynotify
+import re
 import shutil
 import subprocess
 import sys
@@ -36,6 +38,9 @@ from urllib2 import urlopen, HTTPError, URLError
 import vte
 
 class UpdaterException(Exception):
+	pass
+
+class SystemUpToDate(Exception):
 	pass
 
 class AboutWindow(gtk.AboutDialog):
@@ -657,9 +662,10 @@ class PocketISRUpdater(object):
 	CDFLAG = '/var/run/pocket-isr-on-cd'
 	DEVICENODE = '/dev/live'
 	DEVICEDIR = '/mnt/live'
-	VERSION_URL = 'http://isr.cmu.edu/software/pocket-isr/VERSION'
+	INFO_URL = 'http://isr.cmu.edu/pocket-isr/info'
 	CHANGES_URL = 'http://isr.cmu.edu/pocket-isr/changes'
 	NETWORK_DELAY = 3000
+	QUERY_INTERVAL = 300 * 1000
 
 	INITIALIZING = 0
 	QUERYING = 1
@@ -680,6 +686,7 @@ class PocketISRUpdater(object):
 		self.about = AboutWindow(self)
 		self.window = None
 		self.notifier = None
+		self.have_info = False
 		self.have_notified = False
 
 		bus = dbus.SystemBus()
@@ -746,16 +753,13 @@ class PocketISRUpdater(object):
 							self._query)
 
 	def _query(self):
-		if self.available is not None:
+		if self.have_info:
 			return
 		try:
-			f = urlopen(self.VERSION_URL)
-			self.available = f.read().strip()
+			f = urlopen(self.INFO_URL)
+			data = f.read()
 			f.close()
-			if self.available == self.current:
-				gtk.main_quit()
-			else:
-				self.set_state(self.NEED_UPDATE)
+			self._parse_update_info(data)
 		except URLError, e:
 			# If there's a DNS error the first time we try, we
 			# will continually end up back here unless nscd is
@@ -767,6 +771,32 @@ class PocketISRUpdater(object):
 		except HTTPError, e:
 			print "Couldn't fetch current version: " + \
 				"server returned " + str(e.code)
+		except (AttributeError, KeyError):
+			# File failed to parse.  We may be in the clutches
+			# of a captive portal, i.e., we've received HTML
+			# rather than the file we expected.  We need to retry
+			# at intervals to detect when the user frees us.
+			print 'Possible captive portal, trying again later'
+			glib.timeout_add(self.QUERY_INTERVAL, self._query)
+		except SystemUpToDate:
+			gtk.main_quit()
+		else:
+			self.have_info = True
+			self.set_state(self.NEED_UPDATE)
+
+	def _parse_update_info(self, data):
+		self.info = dict()
+		for line in data.splitlines():
+			if re.match('(#.*)?\s*$', line):
+				continue
+			match = re.match('([^:]+):\s+(.*)', line)
+			self.info[match.group(1)] = match.group(2)
+		self.available = self.info['Version']
+		# Don't allow the server to force us to downgrade, since
+		# that would allow a malicious proxy to move us to an older
+		# but signed image that has security flaws
+		if LooseVersion(self.current) >= self.available:
+			raise SystemUpToDate()
 
 	def get_update_messages(self):
 		head = 'New Pocket ISR release'
