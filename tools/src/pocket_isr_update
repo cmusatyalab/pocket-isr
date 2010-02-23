@@ -44,6 +44,9 @@ class UpdaterException(Exception):
 class SystemUpToDate(Exception):
 	pass
 
+class FormatError(Exception):
+	pass
+
 class AboutWindow(gtk.AboutDialog):
 	def __init__(self, updater):
 		gtk.AboutDialog.__init__(self)
@@ -776,7 +779,7 @@ class PocketISRUpdater(object):
 		except HTTPError, e:
 			print "Couldn't fetch current version: " + \
 				"server returned " + str(e.code)
-		except (AttributeError, KeyError):
+		except FormatError:
 			# File failed to parse.  We may be in the clutches
 			# of a captive portal, i.e., we've received HTML
 			# rather than the file we expected.  We need to retry
@@ -790,18 +793,22 @@ class PocketISRUpdater(object):
 			self.set_state(self.NEED_UPDATE)
 
 	def _parse_update_info(self, data):
-		self.info = dict()
-		for line in data.splitlines():
-			if re.match('(#.*)?\s*$', line):
-				continue
-			match = re.match('([^:]+):\s+(.*)', line)
-			self.info[match.group(1)] = match.group(2)
-		self.available = self.info['Version']
-		# Don't allow the server to force us to downgrade, since
-		# that would allow a malicious proxy to move us to an older
-		# but signed image that has security flaws
-		if LooseVersion(self.current) >= self.available:
-			raise SystemUpToDate()
+		try:
+			self.info = dict()
+			for line in data.splitlines():
+				if re.match('(#.*)?\s*$', line):
+					continue
+				match = re.match('([^:]+):\s+(.*)', line)
+				self.info[match.group(1)] = match.group(2)
+			self.available = self.info['Version']
+			# Don't allow the server to force us to downgrade,
+			# since that would allow a malicious proxy to move
+			# us to an older but signed image that has security
+			# flaws
+			if LooseVersion(self.current) >= self.available:
+				raise SystemUpToDate()
+		except (AttributeError, KeyError):
+			raise FormatError()
 
 	def get_info(self):
 		# Returns key/value pairs from the INFO file fetched from
