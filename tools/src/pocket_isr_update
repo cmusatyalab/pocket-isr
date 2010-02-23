@@ -795,7 +795,10 @@ class PocketISRUpdater(object):
 	def _parse_update_info(self, data):
 		try:
 			self.info = dict()
-			for line in data.splitlines():
+			lines = data.splitlines()
+			if 'Pocket ISR Update Info' not in lines[0]:
+				raise FormatError()
+			for line in lines[1:]:
 				if re.match('(#.*)?\s*$', line):
 					continue
 				match = re.match('([^:]+):\s+(.*)', line)
@@ -807,7 +810,7 @@ class PocketISRUpdater(object):
 			# flaws
 			if LooseVersion(self.current) >= self.available:
 				raise SystemUpToDate()
-		except (AttributeError, KeyError):
+		except (AttributeError, KeyError, IndexError):
 			raise FormatError()
 
 	def get_info(self):
