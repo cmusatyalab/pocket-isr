@@ -95,10 +95,40 @@ static void _dm_log(int level, const char *file, int line, const char *fmt,
 
 /* blkid helpers */
 
+struct device {
+	gchar *path;
+	gchar *fstype;
+};
+
+static void device_tree_insert(GTree *devices, const char *path,
+			const char *fstype)
+{
+	struct device *device;
+
+	device = g_slice_new0(struct device);
+	device->path = g_strdup(path);
+	device->fstype = g_strdup(fstype);
+	g_tree_insert(devices, device->path, device);
+}
+
+static void device_free(void *_device)
+{
+	struct device *device = _device;
+
+	g_free(device->path);
+	g_free(device->fstype);
+	g_slice_free(struct device, device);
+}
+
 static int compare_device_names(const void *a, const void *b, void *data)
 {
 	(void) data;
 	return strcmp(a, b);
+}
+
+static GTree *device_tree_new(void)
+{
+	return g_tree_new_full(compare_device_names, NULL, NULL, device_free);
 }
 
 static const char *blkid_dev_get_value(blkid_dev dev, const char *tag)
@@ -123,38 +153,37 @@ static void add_all_devices(blkid_cache cache, GTree *devices)
 {
 	blkid_dev_iterate iter;
 	blkid_dev dev;
-	const char *device;
+	const char *path;
 	const char *fstype;
 
 	if (blkid_probe_all(cache))
 		die("Couldn't probe devices");
 	iter = blkid_dev_iterate_begin(cache);
 	while (!blkid_dev_next(iter, &dev)) {
-		device = blkid_dev_devname(dev);
+		path = blkid_dev_devname(dev);
 		fstype = blkid_dev_get_value(dev, "TYPE");
-		if (fstype != NULL) 
-			g_tree_insert(devices, g_strdup(device),
-						g_strdup(fstype));
+		if (fstype != NULL)
+			device_tree_insert(devices, path, fstype);
 	}
 	blkid_dev_iterate_end(iter);
 }
 
-static void add_device(blkid_cache cache, GTree *devices, const char *device)
+static void add_device(blkid_cache cache, GTree *devices, const char *path)
 {
 	blkid_dev dev;
 	const char *fstype;
 
-	dev = blkid_get_dev(cache, device, BLKID_DEV_NORMAL);
+	dev = blkid_get_dev(cache, path, BLKID_DEV_NORMAL);
 	if (dev == NULL) {
-		msg("%s: Couldn't probe device", device);
+		msg("%s: Couldn't probe device", path);
 		return;
 	}
 	fstype = blkid_dev_get_value(dev, "TYPE");
 	if (fstype == NULL) {
-		msg("%s: Couldn't determine filesystem type", device);
+		msg("%s: Couldn't determine filesystem type", path);
 		return;
 	}
-	g_tree_insert(devices, g_strdup(device), g_strdup(fstype));
+	device_tree_insert(devices, path, fstype);
 }
 
 /* dm helpers */
@@ -177,26 +206,26 @@ static gboolean dm_device_exists(const char *name)
 	return info.exists;
 }
 
-static void add_extent(const char *device, uint64_t start_sect,
+static void add_extent(struct device *device, uint64_t start_sect,
 			uint64_t sect_count)
 {
 	gchar *args;
 
 	if (sect_count < min_extent_sectors)
 		return;
-	args = g_strdup_printf("%s %"PRIu64, device, start_sect);
+	args = g_strdup_printf("%s %"PRIu64, device->path, start_sect);
 	if (!dm_task_add_target(task, used_sectors, sect_count,
 				"linear", args))
 		die("Couldn't add %"PRIu64" sectors of %s at %"PRIu64
-		                        " to map", sect_count, device,
-		                        start_sect);
+					" to map", sect_count, device->path,
+					start_sect);
 	used_sectors += sect_count;
 	g_free(args);
 }
 
 /* ext[234] */
 
-static void handle_ext(const char *device, uint64_t sectors)
+static void handle_ext(struct device *device, uint64_t sectors)
 {
 	ext2_filsys fs;
 	blk_t blk;
@@ -205,20 +234,20 @@ static void handle_ext(const char *device, uint64_t sectors)
 
 	(void) sectors;
 
-	if (ext2fs_open(device, 0, 0, 0, unix_io_manager, &fs)) {
-		msg("Couldn't read filesystem on %s", device);
+	if (ext2fs_open(device->path, 0, 0, 0, unix_io_manager, &fs)) {
+		msg("Couldn't read filesystem on %s", device->path);
 		return;
 	}
 	if (fs->super->s_state & EXT2_ERROR_FS) {
-		msg("Filesystem on %s has errors, skipping", device);
+		msg("Filesystem on %s has errors, skipping", device->path);
 		goto out;
 	}
 	if (!(fs->super->s_state & EXT2_VALID_FS)) {
-		msg("Unclean filesystem on %s, skipping", device);
+		msg("Unclean filesystem on %s, skipping", device->path);
 		goto out;
 	}
 	if (ext2fs_read_block_bitmap(fs)) {
-		msg("Couldn't read block bitmap on %s", device);
+		msg("Couldn't read block bitmap on %s", device->path);
 		goto out;
 	}
 	block_sectors = fs->blocksize / 512;
@@ -237,12 +266,12 @@ static void handle_ext(const char *device, uint64_t sectors)
 					run * block_sectors);
 out:
 	if (ext2fs_close(fs))
-		die("Couldn't close filesystem on %s", device);
+		die("Couldn't close filesystem on %s", device->path);
 }
 
 /* ntfs */
 
-static void handle_ntfs(const char *device, uint64_t sectors)
+static void handle_ntfs(struct device *device, uint64_t sectors)
 {
 	ntfs_volume *vol;
 	uint8_t *bitmap;
@@ -262,29 +291,29 @@ static void handle_ntfs(const char *device, uint64_t sectors)
 	   we don't use that flag so that ntfs_mount() will fail the
 	   mount if the log is dirty or the filesystem has a Windows
 	   hibernate image. */
-	vol = ntfs_mount(device, NTFS_MNT_FORENSIC);
+	vol = ntfs_mount(device->path, NTFS_MNT_FORENSIC);
 	if (vol == NULL) {
 		msg("Couldn't open filesystem on %s; it may be unclean "
-		                        "or hibernated", device);
+					"or hibernated", device->path);
 		return;
 	}
 	if (ntfs_version_is_supported(vol)) {
-		msg("Unsupported filesystem version on %s", device);
+		msg("Unsupported filesystem version on %s", device->path);
 		goto out;
 	}
 	if (NVolWasDirty(vol)) {
-		msg("Filesystem on %s needs checking, skipping", device);
+		msg("Filesystem on %s needs checking, skipping", device->path);
 		goto out;
 	}
 	bitmap_len = vol->lcnbmp_na->data_size;
 	if (bitmap_len * 8 < vol->nr_clusters) {
-		msg("Unexpectedly short volume bitmap on %s", device);
+		msg("Unexpectedly short volume bitmap on %s", device->path);
 		goto out;
 	}
 	bitmap = g_malloc(bitmap_len);
 	if (ntfs_attr_pread(vol->lcnbmp_na, 0, bitmap_len, bitmap) !=
 				bitmap_len) {
-		msg("Short read for volume bitmap on %s", device);
+		msg("Short read for volume bitmap on %s", device->path);
 		g_free(bitmap);
 		goto out;
 	}
@@ -304,7 +333,7 @@ static void handle_ntfs(const char *device, uint64_t sectors)
 	g_free(bitmap);
 out:
 	if (ntfs_umount(vol, FALSE))
-		die("Couldn't close filesystem on %s", device);
+		die("Couldn't close filesystem on %s", device->path);
 }
 
 /* swap */
@@ -320,7 +349,7 @@ struct swap_header {
 	uint32_t badpages[1];
 };
 
-static void handle_swap(const char *device, uint64_t sectors)
+static void handle_swap(struct device *device, uint64_t sectors)
 {
 	int fd;
 	int pagesize;
@@ -332,34 +361,35 @@ static void handle_swap(const char *device, uint64_t sectors)
 	if (pagesize == -1)
 		die("Couldn't get page size");
 	buf = g_malloc(pagesize);
-	fd = open(device, O_RDONLY);
+	fd = open(device->path, O_RDONLY);
 	if (fd == -1) {
-		msg("Couldn't open %s", device);
+		msg("Couldn't open %s", device->path);
 		goto out;
 	}
 	if (read(fd, buf, pagesize) != pagesize) {
-		msg("Couldn't read %s", device);
+		msg("Couldn't read %s", device->path);
 		goto out;
 	}
 	if (memcmp(buf + pagesize - 10, "SWAPSPACE2", 10)) {
-		msg("Unrecognized swap signature on device %s", device);
+		msg("Unrecognized swap signature on device %s", device->path);
 		goto out;
 	}
 	hdr = (struct swap_header *) buf;
 	if (hdr->version != 1) {
-		msg("Unknown swap version %d on %s", hdr->version, device);
+		msg("Unknown swap version %d on %s", hdr->version,
+					device->path);
 		goto out;
 	}
 	if (hdr->nr_badpages) {
 		/* Not implemented */
-		msg("Rejecting swap device %s with %d bad pages", device,
-					hdr->nr_badpages);
+		msg("Rejecting swap device %s with %d bad pages",
+					device->path, hdr->nr_badpages);
 		goto out;
 	}
 	/* Sanity check device length */
 	page_sectors = pagesize / 512;
 	if (hdr->last_page != (sectors / page_sectors) - 1) {
-		msg("Length mismatch on swap device %s", device);
+		msg("Length mismatch on swap device %s", device->path);
 		goto out;
 	}
 	add_extent(device, page_sectors, ((uint64_t) hdr->last_page) *
@@ -373,7 +403,7 @@ out:
 
 static const struct handler {
 	const char *fstype;
-	void (*run)(const char *device, uint64_t sectors);
+	void (*run)(struct device *device, uint64_t sectors);
 } handlers[] = {
 	{"ext2", handle_ext},
 	{"ext3", handle_ext},
@@ -383,20 +413,20 @@ static const struct handler {
 	{NULL, NULL}
 };
 
-static gboolean handle_one(void *_device, void *_fstype, void *data)
+static gboolean handle_one(void *path, void *_device, void *data)
 {
-	const char *device = _device;
-	const char *fstype = _fstype;
+	struct device *device = _device;
 	const struct handler *hdlr;
 	const char *reason = NULL;
 	int flags;
 	uint64_t device_sectors;
 	uint64_t orig_sectors = used_sectors;
 
+	(void) path;
 	(void) data;
 
-	if (ext2fs_check_if_mounted(device, &flags))
-		die("Couldn't check mount status of %s", device);
+	if (ext2fs_check_if_mounted(device->path, &flags))
+		die("Couldn't check mount status of %s", device->path);
 	if ((flags & (EXT2_MF_MOUNTED | EXT2_MF_READONLY)) == EXT2_MF_MOUNTED)
 		reason = "mounted rw";
 	else if (flags & EXT2_MF_SWAP)
@@ -404,29 +434,29 @@ static gboolean handle_one(void *_device, void *_fstype, void *data)
 	else if (flags & EXT2_MF_BUSY)
 		reason = "busy";
 	if (reason != NULL) {
-		msg("%s is %s, skipping", device, reason);
+		msg("%s is %s, skipping", device->path, reason);
 		return FALSE;
 	}
 
-	if (ext2fs_get_device_size2(device, 512,
-	                        (blk64_t *) &device_sectors)) {
-		msg("Couldn't query size of %s", device);
+	if (ext2fs_get_device_size2(device->path, 512,
+				(blk64_t *) &device_sectors)) {
+		msg("Couldn't query size of %s", device->path);
 		return FALSE;
 	}
 
 	for (hdlr = handlers; hdlr->fstype != NULL; hdlr++) {
-		if (!strcmp(fstype, hdlr->fstype)) {
-			msg("%s: Detected %s", device, fstype);
+		if (!strcmp(device->fstype, hdlr->fstype)) {
+			msg("%s: Detected %s", device->path, device->fstype);
 			hdlr->run(device, device_sectors);
 			if (used_sectors > orig_sectors)
 				info("%s (%s): %"PRIu64"/%"PRIu64" MiB",
-				                device, fstype,
-                                                (used_sectors - orig_sectors)
-                                                >> 11, device_sectors >> 11);
+						device->path, device->fstype,
+						(used_sectors - orig_sectors)
+						>> 11, device_sectors >> 11);
 			return FALSE;
 		}
 	}
-	msg("%s: Unknown filesystem %s", device, fstype);
+	msg("%s: Unknown filesystem %s", device->path, device->fstype);
 	return FALSE;
 }
 
@@ -465,8 +495,7 @@ int main(int argc, char **argv)
 	if (!dm_task_set_name(task, device_name))
 		die("Couldn't set device name");
 
-	devices = g_tree_new_full(compare_device_names, NULL, g_free,
-				g_free);
+	devices = device_tree_new();
 	/* Avoid using a cache file, since we want to ensure we don't get
 	   stale data, and if we use a real cache file there's nothing in
 	   the API that allows us to detect/reject stale entries. */
