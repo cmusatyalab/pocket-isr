@@ -99,6 +99,10 @@ struct device {
 	gchar *path;
 	gchar *fstype;
 	uint64_t sectors;
+	uint64_t free_sectors;
+	uint64_t accepted_sectors;
+	unsigned free_extents;
+	unsigned accepted_extents;
 };
 
 static void device_tree_insert(GTree *devices, const char *path,
@@ -212,6 +216,8 @@ static void add_extent(struct device *device, uint64_t start_sect,
 {
 	gchar *args;
 
+	device->free_extents++;
+	device->free_sectors += sect_count;
 	if (sect_count < min_extent_sectors)
 		return;
 	args = g_strdup_printf("%s %"PRIu64, device->path, start_sect);
@@ -221,6 +227,8 @@ static void add_extent(struct device *device, uint64_t start_sect,
 					" to map", sect_count, device->path,
 					start_sect);
 	used_sectors += sect_count;
+	device->accepted_extents++;
+	device->accepted_sectors += sect_count;
 	g_free(args);
 }
 
@@ -416,7 +424,6 @@ static gboolean handle_one(void *path, void *_device, void *data)
 	const struct handler *hdlr;
 	const char *reason = NULL;
 	int flags;
-	uint64_t orig_sectors = used_sectors;
 
 	(void) path;
 	(void) data;
@@ -444,15 +451,30 @@ static gboolean handle_one(void *path, void *_device, void *data)
 		if (!strcmp(device->fstype, hdlr->fstype)) {
 			msg("%s: Detected %s", device->path, device->fstype);
 			hdlr->run(device);
-			if (used_sectors > orig_sectors)
-				info("%s (%s): %"PRIu64"/%"PRIu64" MiB",
-						device->path, device->fstype,
-						(used_sectors - orig_sectors)
-						>> 11, device->sectors >> 11);
 			return FALSE;
 		}
 	}
 	msg("%s: Unknown filesystem %s", device->path, device->fstype);
+	return FALSE;
+}
+
+static gboolean print_stats(void *path, void *_device, void *_total)
+{
+	struct device *device = _device;
+	uint64_t *total = _total;
+
+	(void) path;
+
+	if (device->free_sectors > 0)
+		info("%s (%s): %"PRIu64"/%"PRIu64"/%"PRIu64" MiB, "
+				"%u/%u extents",
+				device->path, device->fstype,
+				device->accepted_sectors >> 11,
+				device->free_sectors >> 11,
+				device->sectors >> 11,
+				device->accepted_extents,
+				device->free_extents);
+	*total += device->accepted_sectors;
 	return FALSE;
 }
 
@@ -463,6 +485,7 @@ int main(int argc, char **argv)
 	const char *device_name;
 	blkid_cache blkid_cache;
 	GTree *devices;
+	uint64_t accepted_sectors = 0;
 
 	opt_ctx = g_option_context_new("NODE [DEVICE ...]");
 	g_option_context_set_summary(opt_ctx, "Collects free disk space "
@@ -506,16 +529,18 @@ int main(int argc, char **argv)
 		for (; *exclude != NULL; exclude++)
 			g_tree_remove(devices, *exclude);
 	g_tree_foreach(devices, handle_one, NULL);
-	blkid_put_cache(blkid_cache);
-	g_tree_destroy(devices);
 
-	info("Total found: %"PRIu64" MiB", used_sectors >> 11);
-	if (minsize && (used_sectors >> 11) < minsize)
+	g_tree_foreach(devices, print_stats, &accepted_sectors);
+	info("Total accepted: %"PRIu64" MiB", accepted_sectors >> 11);
+	if (minsize && (accepted_sectors >> 11) < minsize)
 		die("Minimum size requirement not met, aborting");
 
 	if (!dry_run && !dm_task_run(task))
 		die("Couldn't create device");
+
 	dm_task_destroy(task);
+	blkid_put_cache(blkid_cache);
+	g_tree_destroy(devices);
 
 	if (dry_run)
 		info("Test mode, not creating device");
