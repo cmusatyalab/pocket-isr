@@ -21,6 +21,7 @@
 #include <stdlib.h>
 #include <stdarg.h>
 #include <stdint.h>
+#include <inttypes.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <libdevmapper.h>
@@ -183,11 +184,12 @@ static void add_extent(const char *device, uint64_t start_sect,
 
 	if (sect_count < min_extent_sectors)
 		return;
-	args = g_strdup_printf("%s %llu", device, start_sect);
+	args = g_strdup_printf("%s %"PRIu64, device, start_sect);
 	if (!dm_task_add_target(task, used_sectors, sect_count,
 				"linear", args))
-		die("Couldn't add %llu sectors of %s at %llu to map",
-					sect_count, device, start_sect);
+		die("Couldn't add %"PRIu64" sectors of %s at %"PRIu64
+		                        " to map", sect_count, device,
+		                        start_sect);
 	used_sectors += sect_count;
 	g_free(args);
 }
@@ -406,7 +408,8 @@ static gboolean handle_one(void *_device, void *_fstype, void *data)
 		return FALSE;
 	}
 
-	if (ext2fs_get_device_size2(device, 512, &device_sectors)) {
+	if (ext2fs_get_device_size2(device, 512,
+	                        (blk64_t *) &device_sectors)) {
 		msg("Couldn't query size of %s", device);
 		return FALSE;
 	}
@@ -416,10 +419,10 @@ static gboolean handle_one(void *_device, void *_fstype, void *data)
 			msg("%s: Detected %s", device, fstype);
 			hdlr->run(device, device_sectors);
 			if (used_sectors > orig_sectors)
-				info("%s (%s): %llu/%llu MiB", device,
-						fstype, (used_sectors -
-						orig_sectors) >> 11,
-						device_sectors >> 11);
+				info("%s (%s): %"PRIu64"/%"PRIu64" MiB",
+				                device, fstype,
+                                                (used_sectors - orig_sectors)
+                                                >> 11, device_sectors >> 11);
 			return FALSE;
 		}
 	}
@@ -481,7 +484,7 @@ int main(int argc, char **argv)
 	blkid_put_cache(blkid_cache);
 	g_tree_destroy(devices);
 
-	info("Total found: %llu MiB", used_sectors >> 11);
+	info("Total found: %"PRIu64" MiB", used_sectors >> 11);
 	if (minsize && (used_sectors >> 11) < minsize)
 		die("Minimum size requirement not met, aborting");
 
