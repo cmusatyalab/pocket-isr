@@ -98,6 +98,7 @@ static void _dm_log(int level, const char *file, int line, const char *fmt,
 struct device {
 	gchar *path;
 	gchar *fstype;
+	uint64_t sectors;
 };
 
 static void device_tree_insert(GTree *devices, const char *path,
@@ -225,14 +226,12 @@ static void add_extent(struct device *device, uint64_t start_sect,
 
 /* ext[234] */
 
-static void handle_ext(struct device *device, uint64_t sectors)
+static void handle_ext(struct device *device)
 {
 	ext2_filsys fs;
 	blk_t blk;
 	uint64_t run;
 	unsigned block_sectors;
-
-	(void) sectors;
 
 	if (ext2fs_open(device->path, 0, 0, 0, unix_io_manager, &fs)) {
 		msg("Couldn't read filesystem on %s", device->path);
@@ -271,7 +270,7 @@ out:
 
 /* ntfs */
 
-static void handle_ntfs(struct device *device, uint64_t sectors)
+static void handle_ntfs(struct device *device)
 {
 	ntfs_volume *vol;
 	uint8_t *bitmap;
@@ -279,8 +278,6 @@ static void handle_ntfs(struct device *device, uint64_t sectors)
 	int64_t lcn;
 	uint64_t run;
 	unsigned cluster_sectors;
-
-	(void) sectors;
 
 	if (verbose)
 		ntfs_log_set_handler(ntfs_log_handler_stderr);
@@ -349,7 +346,7 @@ struct swap_header {
 	uint32_t badpages[1];
 };
 
-static void handle_swap(struct device *device, uint64_t sectors)
+static void handle_swap(struct device *device)
 {
 	int fd;
 	int pagesize;
@@ -388,7 +385,7 @@ static void handle_swap(struct device *device, uint64_t sectors)
 	}
 	/* Sanity check device length */
 	page_sectors = pagesize / 512;
-	if (hdr->last_page != (sectors / page_sectors) - 1) {
+	if (hdr->last_page != (device->sectors / page_sectors) - 1) {
 		msg("Length mismatch on swap device %s", device->path);
 		goto out;
 	}
@@ -403,7 +400,7 @@ out:
 
 static const struct handler {
 	const char *fstype;
-	void (*run)(struct device *device, uint64_t sectors);
+	void (*run)(struct device *device);
 } handlers[] = {
 	{"ext2", handle_ext},
 	{"ext3", handle_ext},
@@ -419,7 +416,6 @@ static gboolean handle_one(void *path, void *_device, void *data)
 	const struct handler *hdlr;
 	const char *reason = NULL;
 	int flags;
-	uint64_t device_sectors;
 	uint64_t orig_sectors = used_sectors;
 
 	(void) path;
@@ -439,7 +435,7 @@ static gboolean handle_one(void *path, void *_device, void *data)
 	}
 
 	if (ext2fs_get_device_size2(device->path, 512,
-				(blk64_t *) &device_sectors)) {
+				(blk64_t *) &device->sectors)) {
 		msg("Couldn't query size of %s", device->path);
 		return FALSE;
 	}
@@ -447,12 +443,12 @@ static gboolean handle_one(void *path, void *_device, void *data)
 	for (hdlr = handlers; hdlr->fstype != NULL; hdlr++) {
 		if (!strcmp(device->fstype, hdlr->fstype)) {
 			msg("%s: Detected %s", device->path, device->fstype);
-			hdlr->run(device, device_sectors);
+			hdlr->run(device);
 			if (used_sectors > orig_sectors)
 				info("%s (%s): %"PRIu64"/%"PRIu64" MiB",
 						device->path, device->fstype,
 						(used_sectors - orig_sectors)
-						>> 11, device_sectors >> 11);
+						>> 11, device->sectors >> 11);
 			return FALSE;
 		}
 	}
