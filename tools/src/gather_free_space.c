@@ -37,6 +37,7 @@
 const char **exclude;
 unsigned minsize = 4;  /* MiB */
 unsigned min_extent_kb;
+unsigned max_extent_count = 100000;
 gboolean quiet;
 gboolean verbose;
 gboolean dry_run;
@@ -45,6 +46,7 @@ static const GOptionEntry options[] = {
 	{"exclude", 'x', 0, G_OPTION_ARG_STRING_ARRAY, &exclude, "Skip the specified device", "DEVICE"},
 	{"min", 'm', 0, G_OPTION_ARG_INT, &minsize, "Minimum size for new device", "MiB"},
 	{"min-extent-size", 'e', 0, G_OPTION_ARG_INT, &min_extent_kb, "Minimum length of free space extent", "KiB"},
+	{"max-extent-count", 'E', 0, G_OPTION_ARG_INT, &max_extent_count, "Maximum number of free space extents", "N"},
 	{"test", 't', 0, G_OPTION_ARG_NONE, &dry_run, "Do everything except create the device", NULL},
 	{"quiet", 'q', 0, G_OPTION_ARG_NONE, &quiet, "Suppress summary information", NULL},
 	{"verbose", 'v', 0, G_OPTION_ARG_NONE, &verbose, "Be verbose", NULL},
@@ -52,9 +54,9 @@ static const GOptionEntry options[] = {
 };
 
 /* Other globals */
-struct dm_task *task;
+struct extent *extents;
+unsigned used_extents;
 unsigned min_extent_sectors;
-uint64_t used_sectors;
 
 /* Logging */
 
@@ -96,6 +98,7 @@ static void _dm_log(int level, const char *file, int line, const char *fmt,
 /* blkid helpers */
 
 struct device {
+	GQuark id;
 	gchar *path;
 	gchar *fstype;
 	uint64_t sectors;
@@ -111,6 +114,7 @@ static void device_tree_insert(GTree *devices, const char *path,
 	struct device *device;
 
 	device = g_slice_new0(struct device);
+	device->id = g_quark_from_string(path);
 	device->path = g_strdup(path);
 	device->fstype = g_strdup(fstype);
 	g_tree_insert(devices, device->path, device);
@@ -193,6 +197,12 @@ static void add_device(blkid_cache cache, GTree *devices, const char *path)
 
 /* dm helpers */
 
+struct extent {
+	struct device *device;
+	uint64_t start_sect;
+	uint64_t sect_count;
+};
+
 static gboolean dm_device_exists(const char *name)
 {
 	struct dm_task *dmt;
@@ -211,25 +221,133 @@ static gboolean dm_device_exists(const char *name)
 	return info.exists;
 }
 
+static void dm_add_extent(struct dm_task *task, struct extent *extent,
+			uint64_t offset)
+{
+	gchar *args;
+
+	args = g_strdup_printf("%s %"PRIu64, extent->device->path,
+				extent->start_sect);
+	if (!dm_task_add_target(task, offset, extent->sect_count, "linear",
+				args))
+		die("Couldn't add %"PRIu64" sectors of %s at %"PRIu64
+					" to map", extent->sect_count,
+					extent->device->path,
+					extent->start_sect);
+	g_free(args);
+}
+
+/* Extent list */
+
+/* The length of the DM table needs to be bounded, since it's just a
+   vmalloc'd array in kernel memory, and vmalloc space is generally
+   limited to 128 MiB.  We want the table to contain the largest
+   available extents, sorted by device and sector number.  (We don't
+   want to interleave extents from different devices because they may
+   be different partitions on the same physical disk.)
+
+   Algorithm:
+
+   1. Allocate an array of length max_extent_count.
+   2. Insert extents into the array in sequential order until the array
+      fills up.
+   3. If this occurs, convert the array to a binary min-heap based on the
+      length of each extent.  Continue inserting extents, but only if they
+      are larger than the smallest extent.  Before inserting a new extent,
+      remove the smallest extent.
+   4. Sort the array by device and sector number and add its entries to a
+      DM table.
+ */
+
+static void extent_swap(struct extent *a, struct extent *b)
+{
+	struct extent tmp;
+
+	tmp = *a;
+	*a = *b;
+	*b = tmp;
+}
+
+static void extent_sift_down(unsigned node)
+{
+	unsigned left = 2 * node + 1;
+	unsigned right = 2 * node + 2;
+	uint64_t min = extents[node].sect_count;
+	unsigned min_node = node;
+
+	if (left < used_extents && extents[left].sect_count < min) {
+		min = extents[left].sect_count;
+		min_node = left;
+	}
+	if (right < used_extents && extents[right].sect_count < min) {
+		min = extents[right].sect_count;
+		min_node = right;
+	}
+	if (min_node != node) {
+		extent_swap(&extents[min_node], &extents[node]);
+		extent_sift_down(min_node);
+	}
+}
+
+static void extent_make_heap(void)
+{
+	int node;
+
+	for (node = (int) (used_extents / 2) - 1; node >= 0; node--)
+		extent_sift_down(node);
+}
+
 static void add_extent(struct device *device, uint64_t start_sect,
 			uint64_t sect_count)
 {
-	gchar *args;
+	struct extent new = {
+		.device = device,
+		.start_sect = start_sect,
+		.sect_count = sect_count
+	};
 
 	device->free_extents++;
 	device->free_sectors += sect_count;
 	if (sect_count < min_extent_sectors)
 		return;
-	args = g_strdup_printf("%s %"PRIu64, device->path, start_sect);
-	if (!dm_task_add_target(task, used_sectors, sect_count,
-				"linear", args))
-		die("Couldn't add %"PRIu64" sectors of %s at %"PRIu64
-					" to map", sect_count, device->path,
-					start_sect);
-	used_sectors += sect_count;
+	if (used_extents < max_extent_count) {
+		extents[used_extents] = new;
+		if (++used_extents == max_extent_count)
+			extent_make_heap();
+	} else {
+		if (extents[0].sect_count >= sect_count)
+			return;
+		extents[0].device->accepted_extents--;
+		extents[0].device->accepted_sectors -= extents[0].sect_count;
+		extents[0] = new;
+		extent_sift_down(0);
+	}
 	device->accepted_extents++;
 	device->accepted_sectors += sect_count;
-	g_free(args);
+}
+
+static int extent_compare_offsets(const void *_a, const void *_b)
+{
+	const struct extent *a = _a;
+	const struct extent *b = _b;
+
+	if (a->device->id != b->device->id)
+		return a->device->id < b->device->id ? -1 : 1;
+	if (a->start_sect != b->start_sect)
+		return a->start_sect < b->start_sect ? -1 : 1;
+	return 0;
+}
+
+static void extent_populate_table(struct dm_task *task)
+{
+	uint64_t sector = 0;
+	unsigned n;
+
+	qsort(extents, used_extents, sizeof(*extents), extent_compare_offsets);
+	for (n = 0; n < used_extents; n++) {
+		dm_add_extent(task, &extents[n], sector);
+		sector += extents[n].sect_count;
+	}
 }
 
 /* ext[234] */
@@ -485,6 +603,7 @@ int main(int argc, char **argv)
 	const char *device_name;
 	blkid_cache blkid_cache;
 	GTree *devices;
+	struct dm_task *task;
 	uint64_t accepted_sectors = 0;
 
 	opt_ctx = g_option_context_new("NODE [DEVICE ...]");
@@ -495,6 +614,8 @@ int main(int argc, char **argv)
 		die("%s", err->message);
 	g_option_context_free(opt_ctx);
 	min_extent_sectors = min_extent_kb << 1;
+	if (max_extent_count == 0)
+		die("--max-extent-count must be at least 1.");
 
 	if (argc < 2)
 		die("You must specify a device name.");
@@ -505,14 +626,11 @@ int main(int argc, char **argv)
 	if (geteuid() != 0)
 		die("You must be root.");
 
+	extents = g_new(struct extent, max_extent_count);
+
 	dm_log_init(_dm_log);
 	if (dm_device_exists(device_name))
 		die("Device %s already exists", device_name);
-	task = dm_task_create(DM_DEVICE_CREATE);
-	if (task == NULL)
-		die("Couldn't create DM task");
-	if (!dm_task_set_name(task, device_name))
-		die("Couldn't set device name");
 
 	devices = device_tree_new();
 	/* Avoid using a cache file, since we want to ensure we don't get
@@ -531,14 +649,22 @@ int main(int argc, char **argv)
 	g_tree_foreach(devices, handle_one, NULL);
 
 	g_tree_foreach(devices, print_stats, &accepted_sectors);
-	info("Total accepted: %"PRIu64" MiB", accepted_sectors >> 11);
+	info("Total accepted: %"PRIu64" MiB, %u extents",
+				accepted_sectors >> 11, used_extents);
 	if (minsize && (accepted_sectors >> 11) < minsize)
 		die("Minimum size requirement not met, aborting");
 
+	task = dm_task_create(DM_DEVICE_CREATE);
+	if (task == NULL)
+		die("Couldn't create DM task");
+	if (!dm_task_set_name(task, device_name))
+		die("Couldn't set device name");
+	extent_populate_table(task);
 	if (!dry_run && !dm_task_run(task))
 		die("Couldn't create device");
-
 	dm_task_destroy(task);
+
+	g_free(extents);
 	blkid_put_cache(blkid_cache);
 	g_tree_destroy(devices);
 
