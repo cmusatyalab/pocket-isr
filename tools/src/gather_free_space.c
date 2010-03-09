@@ -343,16 +343,21 @@ static int extent_compare_offsets(const void *_a, const void *_b)
 	return 0;
 }
 
-static void extent_populate_table(struct dm_task *task)
+static void extent_populate_table(struct dm_task *task,
+			uint64_t *smallest_extent)
 {
 	uint64_t sector = 0;
 	unsigned n;
+	uint64_t smallest = UINT64_MAX;
 
 	qsort(extents, used_extents, sizeof(*extents), extent_compare_offsets);
 	for (n = 0; n < used_extents; n++) {
 		dm_add_extent(task, &extents[n], sector);
 		sector += extents[n].sect_count;
+		if (extents[n].sect_count < smallest)
+			smallest = extents[n].sect_count;
 	}
+	*smallest_extent = smallest;
 }
 
 /* ext[234] */
@@ -610,6 +615,7 @@ int main(int argc, char **argv)
 	GTree *devices;
 	struct dm_task *task;
 	uint64_t accepted_sectors = 0;
+	uint64_t smallest_extent;
 
 	opt_ctx = g_option_context_new("NODE [DEVICE ...]");
 	g_option_context_set_summary(opt_ctx, "Collects free disk space "
@@ -658,11 +664,12 @@ int main(int argc, char **argv)
 		die("Couldn't create DM task");
 	if (!dm_task_set_name(task, device_name))
 		die("Couldn't set device name");
-	extent_populate_table(task);
+	extent_populate_table(task, &smallest_extent);
 
 	g_tree_foreach(devices, print_stats, &accepted_sectors);
-	info("Total accepted: %"PRIu64" MiB, %u extents",
-				accepted_sectors >> 11, used_extents);
+	info("Total accepted: %"PRIu64" MiB, %u extents, smallest %"
+				PRIu64" KiB", accepted_sectors >> 11,
+				used_extents, smallest_extent >> 1);
 	if (minsize && (accepted_sectors >> 11) < minsize)
 		die("Minimum size requirement not met, aborting");
 
