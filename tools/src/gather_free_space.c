@@ -41,6 +41,7 @@ unsigned max_extent_count = 100000;
 gboolean quiet;
 gboolean verbose;
 gboolean dry_run;
+gboolean log_extents;
 
 static const GOptionEntry options[] = {
 	{"exclude", 'x', 0, G_OPTION_ARG_STRING_ARRAY, &exclude, "Skip the specified device", "DEVICE"},
@@ -50,6 +51,7 @@ static const GOptionEntry options[] = {
 	{"test", 't', 0, G_OPTION_ARG_NONE, &dry_run, "Do everything except create the device", NULL},
 	{"quiet", 'q', 0, G_OPTION_ARG_NONE, &quiet, "Suppress summary information", NULL},
 	{"verbose", 'v', 0, G_OPTION_ARG_NONE, &verbose, "Be verbose", NULL},
+	{"dump", 'd', 0, G_OPTION_ARG_NONE, &log_extents, "Log every examined extent to stdout", NULL},
 	{NULL, 0, 0, 0, NULL, NULL, NULL}
 };
 
@@ -306,6 +308,9 @@ static void add_extent(struct device *device, uint64_t start_sect,
 		.sect_count = sect_count
 	};
 
+	if (log_extents)
+		printf("%s %"PRIu64" %"PRIu64"\n", device->path, start_sect,
+					sect_count);
 	device->free_extents++;
 	device->free_sectors += sect_count;
 	if (sect_count < min_extent_sectors)
