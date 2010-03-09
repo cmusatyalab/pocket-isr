@@ -204,6 +204,14 @@ PREFERRED=/usr/bin/startlxde
 DISPLAYMANAGER=/usr/bin/slim-dynwm
 EOF
 
+# We needed DKMS and development packages to build the kernel modules.
+# This has already happened by now, so remove them again to save space.
+# openisr-client and virtualbox-ose depend on dkms, gcc, and make, so
+# ignore dependencies when removing those packages.  Remove *their*
+# dependencies in the normal way.
+rpm -e --nodeps dkms gcc make
+yum remove -y glibc-devel glibc-headers kernel-devel kernel-headers cpp
+
 # Strip unneeded locales
 localedef --list-archive | grep -v en | xargs localedef --delete-from-archive
 mv /usr/lib/locale/locale-archive /usr/lib/locale/locale-archive.tmpl
