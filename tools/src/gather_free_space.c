@@ -653,22 +653,23 @@ int main(int argc, char **argv)
 			g_tree_remove(devices, *exclude);
 	g_tree_foreach(devices, handle_one, NULL);
 
-	g_tree_foreach(devices, print_stats, &accepted_sectors);
-	info("Total accepted: %"PRIu64" MiB, %u extents",
-				accepted_sectors >> 11, used_extents);
-	if (minsize && (accepted_sectors >> 11) < minsize)
-		die("Minimum size requirement not met, aborting");
-
 	task = dm_task_create(DM_DEVICE_CREATE);
 	if (task == NULL)
 		die("Couldn't create DM task");
 	if (!dm_task_set_name(task, device_name))
 		die("Couldn't set device name");
 	extent_populate_table(task);
+
+	g_tree_foreach(devices, print_stats, &accepted_sectors);
+	info("Total accepted: %"PRIu64" MiB, %u extents",
+				accepted_sectors >> 11, used_extents);
+	if (minsize && (accepted_sectors >> 11) < minsize)
+		die("Minimum size requirement not met, aborting");
+
 	if (!dry_run && !dm_task_run(task))
 		die("Couldn't create device");
-	dm_task_destroy(task);
 
+	dm_task_destroy(task);
 	g_free(extents);
 	blkid_put_cache(blkid_cache);
 	g_tree_destroy(devices);
