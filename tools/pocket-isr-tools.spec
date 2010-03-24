@@ -1,5 +1,5 @@
 Name:           pocket-isr-tools
-Version:        1.1
+Version:        1.1.1
 Release:        1%{?dist}
 Summary:        Tools for Pocket ISR live image
 
@@ -54,6 +54,18 @@ rm -rf $RPM_BUILD_ROOT
 /sbin/chkconfig --del early-scratch-setup
 
 %changelog
+* Wed Mar 24 2010 Benjamin Gilbert <bgilbert@cs.cmu.edu> - 1.1.1-1
+- Display 1024-based units as KB/MB/GB rather than KiB/MiB/GiB
+- gather_free_space:
+  - Use largest 10^5 extents rather than rejecting extents < 4 MB
+  - Log additional statistics
+  - Add -d/--dump option for statistical analysis
+  - Fix compiler warnings on 64 bit
+- Pocket ISR Update:
+  - Don't be confused by captive portals
+  - Refuse to downgrade Pocket ISR
+- Other minor improvements
+
 * Fri Feb 19 2010 Benjamin Gilbert <bgilbert@cs.cmu.edu> - 1.1-1
 - Add Pocket ISR Update application
 - Add remount_live_volume script to mount /mnt/live with proper permissions
