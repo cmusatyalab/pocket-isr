@@ -280,7 +280,7 @@ class UpdateWindow(gtk.Window):
 		self.progress.set_fraction(fraction)
 
 	def set_rates(self, download, upload):
-		to_str = lambda title, bps: '{0}: {1} KiB/s'.format(
+		to_str = lambda title, bps: '{0}: {1} KB/s'.format(
 					title, round(bps / 1024, 1))
 		self.download.set_text(to_str('Download', download))
 		self.upload.set_text(to_str('Upload', upload))
@@ -526,7 +526,7 @@ class UpdateRunner(object):
 				text = None
 			else:
 				task = 'Downloading'
-				text = '{0}/{1} MiB'.format(
+				text = '{0}/{1} MB'.format(
 						stat.total_wanted_done >> 20,
 						stat.total_wanted >> 20)
 			self.window.set_status('Downloading update: {0}...'.

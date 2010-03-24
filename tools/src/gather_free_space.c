@@ -45,8 +45,8 @@ gboolean log_extents;
 
 static const GOptionEntry options[] = {
 	{"exclude", 'x', 0, G_OPTION_ARG_STRING_ARRAY, &exclude, "Skip the specified device", "DEVICE"},
-	{"min", 'm', 0, G_OPTION_ARG_INT, &minsize, "Minimum size for new device", "MiB"},
-	{"min-extent-size", 'e', 0, G_OPTION_ARG_INT, &min_extent_kb, "Minimum length of free space extent", "KiB"},
+	{"min", 'm', 0, G_OPTION_ARG_INT, &minsize, "Minimum size for new device", "MB"},
+	{"min-extent-size", 'e', 0, G_OPTION_ARG_INT, &min_extent_kb, "Minimum length of free space extent", "KB"},
 	{"max-extent-count", 'E', 0, G_OPTION_ARG_INT, &max_extent_count, "Maximum number of free space extents", "N"},
 	{"test", 't', 0, G_OPTION_ARG_NONE, &dry_run, "Do everything except create the device", NULL},
 	{"quiet", 'q', 0, G_OPTION_ARG_NONE, &quiet, "Suppress summary information", NULL},
@@ -594,7 +594,7 @@ static gboolean print_stats(void *path, void *_device, void *_total)
 	(void) path;
 
 	if (device->free_sectors > 0)
-		info("%s (%s): %"PRIu64"/%"PRIu64"/%"PRIu64" MiB, "
+		info("%s (%s): %"PRIu64"/%"PRIu64"/%"PRIu64" MB, "
 				"%u/%u extents",
 				device->path, device->fstype,
 				device->accepted_sectors >> 11,
@@ -667,8 +667,8 @@ int main(int argc, char **argv)
 	extent_populate_table(task, &smallest_extent);
 
 	g_tree_foreach(devices, print_stats, &accepted_sectors);
-	info("Total accepted: %"PRIu64" MiB, %u extents, smallest %"
-				PRIu64" KiB", accepted_sectors >> 11,
+	info("Total accepted: %"PRIu64" MB, %u extents, smallest %"
+				PRIu64" KB", accepted_sectors >> 11,
 				used_extents, smallest_extent >> 1);
 	if (minsize && (accepted_sectors >> 11) < minsize)
 		die("Minimum size requirement not met, aborting");
