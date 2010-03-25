@@ -204,6 +204,9 @@ PREFERRED=/usr/bin/startlxde
 DISPLAYMANAGER=/usr/bin/slim-dynwm
 EOF
 
+# Work around RH#573284
+mkdir -p /var/run/slim
+
 # We needed DKMS and development packages to build the kernel modules.
 # This has already happened by now, so remove them again to save space.
 # openisr-client and virtualbox-ose depend on dkms, gcc, and make, so
