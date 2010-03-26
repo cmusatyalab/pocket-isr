@@ -14,8 +14,8 @@
 
 Summary: 	VirtualBox OSE
 Name: 		virtualbox-ose-3.0
-Version: 	3.0.12
-Release: 	3%{?dist}
+Version: 	3.0.14
+Release: 	1%{?dist}
 Group: 		Applications/System
 License:	GPLv2 and (GPLv2 or CDDL)
 
@@ -33,6 +33,8 @@ URL:		http://www.virtualbox.org/
 Source0:	http://download.virtualbox.org/virtualbox/%{version}/VirtualBox-%{version}-OSE.tar.bz2
 Source1:	virtualbox-ose-LocalConfig.kmk
 Source2:	virtualbox-ose-VBox.sh
+# 3.0.14-specific; not needed for 3.1
+Patch0:		virtualbox-3.0.14-ftbfs.patch
 
 %description
 VirtualBox is a powerful PC virtualization solution allowing you to run a
@@ -43,6 +45,7 @@ virtualization software solution on the market.
 
 %prep
 %setup -q -n VirtualBox-%{version}_OSE
+%patch0 -p1
 
 %build
 cp %{SOURCE1} LocalConfig.kmk
@@ -203,6 +206,10 @@ for m in vboxdrv vboxnetflt vboxnetadp; do
 done
 
 %changelog
+* Fri Mar 26 2010 Benjamin Gilbert <bgilbert@cs.cmu.edu> - 3.0.14-1
+- New upstream release
+- Fix FTBFS in vanilla upstream release
+
 * Fri Feb 19 2010 Benjamin Gilbert <bgilbert@cs.cmu.edu> - 3.0.12-3
 - Fix FTBFS if kernel sources are not available
 - Fix install failure with livecd-creator if VirtualBox is running
