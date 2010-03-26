@@ -4,10 +4,10 @@ OUTDIR = output
 -include local.mk
 
 # $1 = specfile
-# $2 = source number (omit for all)
+# $2 = "Source0", "Patch3", etc. (omit for all sources and patches)
 getsources = $(shell awk '/Name:/ {name = $$2} \
 	/Version:/ {ver = $$2} \
-	/Source$(if $(2),$(2),[0-9]+):/ { \
+	/$(if $(2),$(2),(Source|Patch)[0-9]+):/ { \
 		gsub("%{name}", name); \
 		gsub("%{version}", ver); \
 		print $$2 \
@@ -53,7 +53,7 @@ repo:
 	$(call buildpackage,repo/*.spec)
 
 .PHONY: virtualbox
-virtualbox: VBOXURL := $(call getsources,virtualbox/*.spec,0)
+virtualbox: VBOXURL := $(call getsources,virtualbox/*.spec,Source0)
 virtualbox: VBOXSRC := virtualbox/$(notdir $(VBOXURL))
 virtualbox:
 	[ -f $(VBOXSRC) ] || wget -O $(VBOXSRC) $(VBOXURL)
