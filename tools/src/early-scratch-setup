@@ -42,12 +42,14 @@ fi
 swap_size=`get_arg swap_size 2048`
 # Minimum size (MiB)
 store_size=`get_arg scratch_size $(($swap_size + 128))`
+# KiB
+min_extent_size=`get_arg min_extent_size 4096`
 
 echo "Setting up scratch volume on local disk..."
 
 # Create a DM volume containing all available free space
-/usr/sbin/gather_free_space -m "$store_size" live-scratch-store \
-	-x /dev/mapper/live-osimg-min \
+/usr/sbin/gather_free_space -m "$store_size" -e "$min_extent_size" \
+	live-scratch-store -x /dev/mapper/live-osimg-min \
 	-x `readlink -f /dev/live`
 
 # Create an encrypted DM volume on top of it
