@@ -36,7 +36,7 @@
 /* Command-line options */
 const char **exclude;
 unsigned minsize = 4;  /* MiB */
-unsigned min_extent_kb;
+unsigned min_extent_kb = 4096;
 unsigned max_extent_count = 100000;
 gboolean quiet;
 gboolean verbose;
