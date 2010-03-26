@@ -1,5 +1,5 @@
 Name:           pocket-isr-tools
-Version:        1.1.1
+Version:        1.1.2
 Release:        1%{?dist}
 Summary:        Tools for Pocket ISR live image
 
@@ -54,6 +54,10 @@ rm -rf $RPM_BUILD_ROOT
 /sbin/chkconfig --del early-scratch-setup
 
 %changelog
+* Fri Mar 26 2010 Benjamin Gilbert <bgilbert@cs.cmu.edu> - 1.1.2-1
+- gather_free_space: Reject extents < 4 MB by default to reduce seek overhead
+- early-scratch-setup: Add min_extent_size kernel command-line parameter
+
 * Wed Mar 24 2010 Benjamin Gilbert <bgilbert@cs.cmu.edu> - 1.1.1-1
 - Display 1024-based units as KB/MB/GB rather than KiB/MiB/GiB
 - gather_free_space:
