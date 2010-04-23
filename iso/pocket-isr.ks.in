@@ -16,10 +16,6 @@ selinux --disabled
 repo --name=openisr --baseurl=http://isr.cmu.edu/software/fedora/fc!!FVER!!/$basearch/
 repo --name=pocket-isr --baseurl=!!REPO!!
 
-# Work around RH#578217 in kernel 2.6.32.10-90 causing oops at boot on
-# systems with b44 network cards
-repo --name=updates-testing --mirrorlist=http://mirrors.fedoraproject.org/mirrorlist?repo=updates-testing-f12&arch=$basearch --cost=1000 --includepkgs=kernel,kernel-firmware,kernel-devel,kernel-headers
-
 %packages --instLangs C:en
 @lxde-desktop
 lxlauncher
@@ -207,9 +203,6 @@ cat >> /etc/sysconfig/desktop <<EOF
 PREFERRED=/usr/bin/startlxde
 DISPLAYMANAGER=/usr/bin/slim-dynwm
 EOF
-
-# Work around RH#573284
-mkdir -p /var/run/slim
 
 # We needed DKMS and development packages to build the kernel modules.
 # This has already happened by now, so remove them again to save space.
