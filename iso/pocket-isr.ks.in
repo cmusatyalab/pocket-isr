@@ -415,7 +415,7 @@ gconftool-2 --direct --config-source=xml:readwrite:/etc/gconf/gconf.xml.defaults
 gconftool-2 --direct --config-source=xml:readwrite:/etc/gconf/gconf.xml.defaults -s -t string /desktop/gnome/url-handlers/https/command "midori %s" >/dev/null
 
 # Set hostname so that parcel lockholder logs don't call us "localhost"
-sed -ie 's/^HOSTNAME=.*/HOSTNAME=pocket-isr/' /etc/sysconfig/network
+sed -i 's/^HOSTNAME=.*/HOSTNAME=pocket-isr/' /etc/sysconfig/network
 
 # Add liveuser to necessary system groups
 usermod -a -G isrusers,vboxusers liveuser
