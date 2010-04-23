@@ -119,7 +119,7 @@ cp $inbase/VBoxNetFlt/linux/dkms.conf $outbase/vboxnetflt/
 for d in vboxdrv vboxnetflt vboxnetadp ; do
 	cp $inbase/linux/do_Module.symvers $outbase/$d
 	ln -s ../share/virtualbox/src/$d %{buildroot}/usr/src/$d-%{version}
-	sed -ie 's/_VERSION_/%{version}/' $outbase/$d/dkms.conf
+	sed -i 's/_VERSION_/%{version}/' $outbase/$d/dkms.conf
 done
 
 sed -e 's|%NOLSB%||g' -e 's|%DEBIAN%||g' -e 's|%PACKAGE%|virtualbox|g' \
