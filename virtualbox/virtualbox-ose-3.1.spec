@@ -13,8 +13,8 @@
 %undefine _missing_build_ids_terminate_build
 
 Summary: 	VirtualBox OSE
-Name: 		virtualbox-ose-3.0
-Version: 	3.0.14
+Name: 		virtualbox-ose-3.1
+Version: 	3.1.6
 Release: 	1%{?dist}
 Group: 		Applications/System
 License:	GPLv2 and (GPLv2 or CDDL)
@@ -33,8 +33,11 @@ URL:		http://www.virtualbox.org/
 Source0:	http://download.virtualbox.org/virtualbox/%{version}/VirtualBox-%{version}-OSE.tar.bz2
 Source1:	virtualbox-ose-LocalConfig.kmk
 Source2:	virtualbox-ose-VBox.sh
-# 3.0.14-specific; not needed for 3.1
-Patch0:		virtualbox-3.0.14-ftbfs.patch
+# This script is called by the kernel modules' dkms.conf file, but is
+# apparently no longer shipped in the 3.1 source tarball.  It even seems to
+# have disappeared from the *history* of the public SVN repository (!).
+# Ship the version from the 3.0.14 tarball.
+Source3:	virtualbox-ose-do_Module.symvers
 
 %description
 VirtualBox is a powerful PC virtualization solution allowing you to run a
@@ -45,7 +48,6 @@ virtualization software solution on the market.
 
 %prep
 %setup -q -n VirtualBox-%{version}_OSE
-%patch0 -p1
 
 %build
 cp %{SOURCE1} LocalConfig.kmk
@@ -76,6 +78,7 @@ install -d %{buildroot}/usr/src
 cd out/bin
 mv virtualbox.desktop %{buildroot}/usr/share/applications
 mv VBox.png %{buildroot}/usr/share/pixmaps
+mv VBoxEFI*.fd %{buildroot}/usr/lib/virtualbox
 mv *.gc %{buildroot}/usr/lib/virtualbox
 mv *.r0 %{buildroot}/usr/lib/virtualbox
 mv *.rel %{buildroot}/usr/lib/virtualbox || true
@@ -117,7 +120,7 @@ cp $inbase/Support/linux/dkms.conf $outbase/vboxdrv/
 cp $inbase/VBoxNetAdp/linux/dkms.conf $outbase/vboxnetadp/
 cp $inbase/VBoxNetFlt/linux/dkms.conf $outbase/vboxnetflt/
 for d in vboxdrv vboxnetflt vboxnetadp ; do
-	cp $inbase/linux/do_Module.symvers $outbase/$d
+	install -m 755 %{SOURCE3} $outbase/$d
 	ln -s ../share/virtualbox/src/$d %{buildroot}/usr/src/$d-%{version}
 	sed -i 's/_VERSION_/%{version}/' $outbase/$d/dkms.conf
 done
@@ -154,6 +157,7 @@ rm -rf %{buildroot} out AutoConfig.kmk env.sh
 /usr/lib/virtualbox/VBoxXPCOMIPCD
 /usr/lib/virtualbox/*.gc
 /usr/lib/virtualbox/*.r0
+/usr/lib/virtualbox/*.fd
 /usr/lib/virtualbox/*.so
 /usr/lib/virtualbox/components
 /usr/lib/virtualbox/sdk
@@ -206,6 +210,12 @@ for m in vboxdrv vboxnetflt vboxnetadp; do
 done
 
 %changelog
+* Mon May 03 2010 Benjamin Gilbert <bgilbert@cs.cmu.edu> - 3.1.6-1
+- Shift to VirtualBox 3.1 series
+- Drop 3.0-specific build patch
+- Work around missing do_Module.symvers in 3.1.6 source tarball
+- Fix accidental inclusion of dkms.conf editor backups in the package
+
 * Fri Mar 26 2010 Benjamin Gilbert <bgilbert@cs.cmu.edu> - 3.0.14-1
 - New upstream release
 - Fix FTBFS in vanilla upstream release
