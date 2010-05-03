@@ -119,7 +119,7 @@ openisr-client
 pocket-isr-release
 pocket-isr-artwork
 pocket-isr-tools
-virtualbox-ose-3.0
+virtualbox-ose-3.1
 %end
 
 %post --nochroot --interpreter /usr/bin/perl
