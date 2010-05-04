@@ -1,3 +1,3 @@
-VERSION = 0.9.8-2
+VERSION = 0.9.9-1
 FVER = 12
 ARCH = i386
