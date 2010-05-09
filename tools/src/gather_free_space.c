@@ -731,6 +731,7 @@ int main(int argc, char **argv)
 	info("Total accepted: %"PRIu64" MB, %u extents, smallest %"
 				PRIu64" KB", accepted_sectors >> 11,
 				used_extents, smallest_extent >> 1);
+	report(0, "smallest-extent-kb: %"PRIu64, smallest_extent >> 1);
 
 	if (minsize && (accepted_sectors >> 11) < minsize) {
 		/* We still write out the report file, if requested */
