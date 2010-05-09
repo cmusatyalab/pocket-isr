@@ -594,6 +594,13 @@ static gboolean handle_one(void *path, void *_device, void *data)
 	(void) path;
 	(void) data;
 
+	/* Do this early for the benefit of reject() */
+	if (ext2fs_get_device_size2(device->path, 512,
+				(blk64_t *) &device->sectors)) {
+		reject(device, "Couldn't query size");
+		return FALSE;
+	}
+
 	if (ext2fs_check_if_mounted(device->path, &flags)) {
 		reject(device, "Couldn't check mount status");
 		return FALSE;
@@ -606,12 +613,6 @@ static gboolean handle_one(void *path, void *_device, void *data)
 		reason = "busy";
 	if (reason != NULL) {
 		reject(device, "Device is %s", reason);
-		return FALSE;
-	}
-
-	if (ext2fs_get_device_size2(device->path, 512,
-				(blk64_t *) &device->sectors)) {
-		reject(device, "Couldn't query size");
 		return FALSE;
 	}
 
