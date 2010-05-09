@@ -115,16 +115,16 @@ static G_GNUC_PRINTF(4, 5) void _reject(const char *path, const char *fstype,
 	}
 	if (report != NULL) {
 		va_start(ap, fmt);
-		g_string_append_printf(report, "- device: %s\n", path);
-		g_string_append_printf(report, "  error: true\n");
-		g_string_append_printf(report, "  problem: ");
+		g_string_append_printf(report, "  - device: %s\n", path);
+		g_string_append_printf(report, "    error: true\n");
+		g_string_append_printf(report, "    problem: ");
 		g_string_append_vprintf(report, fmt, ap);
 		g_string_append_printf(report, "\n");
 		if (fstype != NULL)
-			g_string_append_printf(report, "  filesystem: %s\n",
+			g_string_append_printf(report, "    filesystem: %s\n",
 						fstype);
 		if (sectors)
-			g_string_append_printf(report, "  size-kb: %"PRIu64
+			g_string_append_printf(report, "    size-kb: %"PRIu64
 						"\n", sectors / 2);
 		va_end(ap);
 	}
@@ -681,7 +681,7 @@ int main(int argc, char **argv)
 
 	extents = g_new(struct extent, max_extent_count);
 	if (report_file != NULL)
-		report = g_string_sized_new(0);
+		report = g_string_new("devices:\n");
 
 	dm_log_init(_dm_log);
 	if (dm_device_exists(device_name))
