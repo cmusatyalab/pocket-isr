@@ -97,6 +97,23 @@ static void _dm_log(int level, const char *file, int line, const char *fmt,
 	va_end(ap);
 }
 
+static G_GNUC_PRINTF(4, 5) void _reject(const char *path, const char *fstype,
+			uint64_t sectors, const char *fmt, ...)
+{
+	va_list ap;
+
+	if (verbose) {
+		va_start(ap, fmt);
+		fprintf(stderr, "%s: ", path);
+		vfprintf(stderr, fmt, ap);
+		fprintf(stderr, ", skipping\n");
+		va_end(ap);
+	}
+}
+
+#define reject(device, fmt, args...) \
+	_reject(device->path, device->fstype, device->sectors, fmt, ## args)
+
 /* blkid helpers */
 
 struct device {
@@ -186,12 +203,12 @@ static void add_device(blkid_cache cache, GTree *devices, const char *path)
 
 	dev = blkid_get_dev(cache, path, BLKID_DEV_NORMAL);
 	if (dev == NULL) {
-		msg("%s: Couldn't probe device", path);
+		_reject(path, NULL, 0, "Couldn't probe device");
 		return;
 	}
 	fstype = blkid_dev_get_value(dev, "TYPE");
 	if (fstype == NULL) {
-		msg("%s: Couldn't determine filesystem type", path);
+		_reject(path, NULL, 0, "Couldn't determine filesystem type");
 		return;
 	}
 	device_tree_insert(devices, path, fstype);
@@ -373,19 +390,19 @@ static void handle_ext(struct device *device)
 	unsigned block_sectors;
 
 	if (ext2fs_open(device->path, 0, 0, 0, unix_io_manager, &fs)) {
-		msg("Couldn't read filesystem on %s", device->path);
+		reject(device, "Couldn't read filesystem");
 		return;
 	}
 	if (fs->super->s_state & EXT2_ERROR_FS) {
-		msg("Filesystem on %s has errors, skipping", device->path);
+		reject(device, "Filesystem has errors");
 		goto out;
 	}
 	if (!(fs->super->s_state & EXT2_VALID_FS)) {
-		msg("Unclean filesystem on %s, skipping", device->path);
+		reject(device, "Unclean filesystem");
 		goto out;
 	}
 	if (ext2fs_read_block_bitmap(fs)) {
-		msg("Couldn't read block bitmap on %s", device->path);
+		reject(device, "Couldn't read block bitmap");
 		goto out;
 	}
 	block_sectors = fs->blocksize / 512;
@@ -429,27 +446,27 @@ static void handle_ntfs(struct device *device)
 	   hibernate image. */
 	vol = ntfs_mount(device->path, NTFS_MNT_FORENSIC);
 	if (vol == NULL) {
-		msg("Couldn't open filesystem on %s; it may be unclean "
-					"or hibernated", device->path);
+		reject(device, "Couldn't open filesystem; it may be unclean "
+					"or hibernated");
 		return;
 	}
 	if (ntfs_version_is_supported(vol)) {
-		msg("Unsupported filesystem version on %s", device->path);
+		reject(device, "Unsupported filesystem version");
 		goto out;
 	}
 	if (NVolWasDirty(vol)) {
-		msg("Filesystem on %s needs checking, skipping", device->path);
+		reject(device, "Filesystem needs checking");
 		goto out;
 	}
 	bitmap_len = vol->lcnbmp_na->data_size;
 	if (bitmap_len * 8 < vol->nr_clusters) {
-		msg("Unexpectedly short volume bitmap on %s", device->path);
+		reject(device, "Unexpectedly short volume bitmap");
 		goto out;
 	}
 	bitmap = g_malloc(bitmap_len);
 	if (ntfs_attr_pread(vol->lcnbmp_na, 0, bitmap_len, bitmap) !=
 				bitmap_len) {
-		msg("Short read for volume bitmap on %s", device->path);
+		reject(device, "Short read for volume bitmap");
 		g_free(bitmap);
 		goto out;
 	}
@@ -499,33 +516,32 @@ static void handle_swap(struct device *device)
 	buf = g_malloc(pagesize);
 	fd = open(device->path, O_RDONLY);
 	if (fd == -1) {
-		msg("Couldn't open %s", device->path);
+		reject(device, "Couldn't open device");
 		goto out;
 	}
 	if (read(fd, buf, pagesize) != pagesize) {
-		msg("Couldn't read %s", device->path);
+		reject(device, "Couldn't read device");
 		goto out;
 	}
 	if (memcmp(buf + pagesize - 10, "SWAPSPACE2", 10)) {
-		msg("Unrecognized swap signature on device %s", device->path);
+		reject(device, "Unrecognized swap signature");
 		goto out;
 	}
 	hdr = (struct swap_header *) buf;
 	if (hdr->version != 1) {
-		msg("Unknown swap version %d on %s", hdr->version,
-					device->path);
+		reject(device, "Unknown swap version %d", hdr->version);
 		goto out;
 	}
 	if (hdr->nr_badpages) {
 		/* Not implemented */
-		msg("Rejecting swap device %s with %d bad pages",
-					device->path, hdr->nr_badpages);
+		reject(device, "Swap device has %d bad pages",
+					hdr->nr_badpages);
 		goto out;
 	}
 	/* Sanity check device length */
 	page_sectors = pagesize / 512;
 	if (hdr->last_page != (device->sectors / page_sectors) - 1) {
-		msg("Length mismatch on swap device %s", device->path);
+		reject(device, "Length mismatch on swap device");
 		goto out;
 	}
 	add_extent(device, page_sectors, ((uint64_t) hdr->last_page) *
@@ -559,8 +575,10 @@ static gboolean handle_one(void *path, void *_device, void *data)
 	(void) path;
 	(void) data;
 
-	if (ext2fs_check_if_mounted(device->path, &flags))
-		die("Couldn't check mount status of %s", device->path);
+	if (ext2fs_check_if_mounted(device->path, &flags)) {
+		reject(device, "Couldn't check mount status");
+		return FALSE;
+	}
 	if ((flags & (EXT2_MF_MOUNTED | EXT2_MF_READONLY)) == EXT2_MF_MOUNTED)
 		reason = "mounted rw";
 	else if (flags & EXT2_MF_SWAP)
@@ -568,13 +586,13 @@ static gboolean handle_one(void *path, void *_device, void *data)
 	else if (flags & EXT2_MF_BUSY)
 		reason = "busy";
 	if (reason != NULL) {
-		msg("%s is %s, skipping", device->path, reason);
+		reject(device, "Device is %s", reason);
 		return FALSE;
 	}
 
 	if (ext2fs_get_device_size2(device->path, 512,
 				(blk64_t *) &device->sectors)) {
-		msg("Couldn't query size of %s", device->path);
+		reject(device, "Couldn't query size");
 		return FALSE;
 	}
 
@@ -585,7 +603,7 @@ static gboolean handle_one(void *path, void *_device, void *data)
 			return FALSE;
 		}
 	}
-	msg("%s: Unknown filesystem %s", device->path, device->fstype);
+	reject(device, "Unknown filesystem %s", device->fstype);
 	return FALSE;
 }
 
