@@ -634,16 +634,35 @@ static gboolean print_stats(void *path, void *_device, void *_total)
 
 	(void) path;
 
-	if (device->free_sectors > 0)
-		info("%s (%s): %"PRIu64"/%"PRIu64"/%"PRIu64" MB, "
-				"%u/%u extents",
+	*total += device->accepted_sectors;
+	if (device->free_sectors == 0)
+		return FALSE;
+
+	info("%s (%s): %"PRIu64"/%"PRIu64"/%"PRIu64" MB, %u/%u extents",
 				device->path, device->fstype,
 				device->accepted_sectors >> 11,
 				device->free_sectors >> 11,
 				device->sectors >> 11,
 				device->accepted_extents,
 				device->free_extents);
-	*total += device->accepted_sectors;
+
+	if (report != NULL) {
+		g_string_append_printf(report, "  - device: %s\n",
+					device->path);
+		g_string_append_printf(report, "    error: false\n");
+		g_string_append_printf(report, "    filesystem: %s\n",
+					device->fstype);
+		g_string_append_printf(report, "    size-kb: %"PRIu64"\n",
+					device->sectors / 2);
+		g_string_append_printf(report, "    free-kb: %"PRIu64"\n",
+					device->free_sectors / 2);
+		g_string_append_printf(report, "    accepted-kb: %"PRIu64"\n",
+					device->accepted_sectors / 2);
+		g_string_append_printf(report, "    free-extents: %u\n",
+					device->free_extents);
+		g_string_append_printf(report, "    accepted-extents: %u\n",
+					device->accepted_extents);
+	}
 	return FALSE;
 }
 
