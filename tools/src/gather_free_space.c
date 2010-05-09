@@ -357,7 +357,10 @@ static void extent_populate_table(struct dm_task *task,
 		if (extents[n].sect_count < smallest)
 			smallest = extents[n].sect_count;
 	}
-	*smallest_extent = smallest;
+	if (used_extents)
+		*smallest_extent = smallest;
+	else
+		*smallest_extent = 0;
 }
 
 /* ext[234] */
