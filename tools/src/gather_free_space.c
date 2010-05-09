@@ -61,7 +61,7 @@ static const GOptionEntry options[] = {
 struct extent *extents;
 unsigned used_extents;
 unsigned min_extent_sectors;
-GString *report;
+GString *report_str;
 
 /* Logging */
 
@@ -85,6 +85,19 @@ static G_GNUC_PRINTF(3, 4) void _log(gboolean do_squash, gboolean do_exit,
 #define warn(fmt, args...) _log(FALSE, FALSE, fmt, ## args)
 #define die(fmt, args...) _log(FALSE, TRUE, fmt, ## args)
 
+static G_GNUC_PRINTF(2, 3) void report(unsigned level, const char *fmt, ...)
+{
+	va_list ap;
+
+	if (report_str == NULL)
+		return;
+	va_start(ap, fmt);
+	g_string_append_printf(report_str, "%*s", 2 * level, "");
+	g_string_append_vprintf(report_str, fmt, ap);
+	g_string_append_printf(report_str, "\n");
+	va_end(ap);
+}
+
 static void _dm_log(int level, const char *file, int line, const char *fmt,
 			...)
 {
@@ -105,6 +118,7 @@ static G_GNUC_PRINTF(4, 5) void _reject(const char *path, const char *fstype,
 			uint64_t sectors, const char *fmt, ...)
 {
 	va_list ap;
+	gchar *msg;
 
 	if (verbose) {
 		va_start(ap, fmt);
@@ -113,21 +127,18 @@ static G_GNUC_PRINTF(4, 5) void _reject(const char *path, const char *fstype,
 		fprintf(stderr, ", skipping\n");
 		va_end(ap);
 	}
-	if (report != NULL) {
-		va_start(ap, fmt);
-		g_string_append_printf(report, "  - device: %s\n", path);
-		g_string_append_printf(report, "    error: true\n");
-		g_string_append_printf(report, "    problem: ");
-		g_string_append_vprintf(report, fmt, ap);
-		g_string_append_printf(report, "\n");
-		if (fstype != NULL)
-			g_string_append_printf(report, "    filesystem: %s\n",
-						fstype);
-		if (sectors)
-			g_string_append_printf(report, "    size-kb: %"PRIu64
-						"\n", sectors / 2);
-		va_end(ap);
-	}
+
+	va_start(ap, fmt);
+	msg = g_strdup_vprintf(fmt, ap);
+	report(1, "- device: %s", path);
+	report(2, "error: true");
+	report(2, "problem: %s", msg);
+	if (fstype != NULL)
+		report(2, "filesystem: %s", fstype);
+	if (sectors)
+		report(2, "size-kb: %"PRIu64, sectors / 2);
+	g_free(msg);
+	va_end(ap);
 }
 
 #define reject(device, fmt, args...) \
@@ -646,23 +657,14 @@ static gboolean print_stats(void *path, void *_device, void *_total)
 				device->accepted_extents,
 				device->free_extents);
 
-	if (report != NULL) {
-		g_string_append_printf(report, "  - device: %s\n",
-					device->path);
-		g_string_append_printf(report, "    error: false\n");
-		g_string_append_printf(report, "    filesystem: %s\n",
-					device->fstype);
-		g_string_append_printf(report, "    size-kb: %"PRIu64"\n",
-					device->sectors / 2);
-		g_string_append_printf(report, "    free-kb: %"PRIu64"\n",
-					device->free_sectors / 2);
-		g_string_append_printf(report, "    accepted-kb: %"PRIu64"\n",
-					device->accepted_sectors / 2);
-		g_string_append_printf(report, "    free-extents: %u\n",
-					device->free_extents);
-		g_string_append_printf(report, "    accepted-extents: %u\n",
-					device->accepted_extents);
-	}
+	report(1, "- device: %s", device->path);
+	report(2, "error: false");
+	report(2, "filesystem: %s", device->fstype);
+	report(2, "size-kb: %"PRIu64, device->sectors / 2);
+	report(2, "free-kb: %"PRIu64, device->free_sectors / 2);
+	report(2, "accepted-kb: %"PRIu64, device->accepted_sectors / 2);
+	report(2, "free-extents: %u", device->free_extents);
+	report(2, "accepted-extents: %u", device->accepted_extents);
 	return FALSE;
 }
 
@@ -700,7 +702,8 @@ int main(int argc, char **argv)
 
 	extents = g_new(struct extent, max_extent_count);
 	if (report_file != NULL)
-		report = g_string_new("devices:\n");
+		report_str = g_string_sized_new(0);
+	report(0, "devices:");
 
 	dm_log_init(_dm_log);
 	if (dm_device_exists(device_name))
@@ -746,16 +749,16 @@ int main(int argc, char **argv)
 		info("Created device %s", device_name);
 	}
 
-	if (report != NULL) {
+	if (report_str != NULL) {
 		if (!strcmp("-", report_file)) {
-			printf("%s", report->str);
-		} else if (!g_file_set_contents(report_file, report->str,
-					report->len, &err)) {
+			printf("%s", report_str->str);
+		} else if (!g_file_set_contents(report_file, report_str->str,
+					report_str->len, &err)) {
 			warn("%s", err->message);
 			g_clear_error(&err);
 			ret = 1;
 		}
-		g_string_free(report, TRUE);
+		g_string_free(report_str, TRUE);
 	}
 
 	dm_task_destroy(task);
