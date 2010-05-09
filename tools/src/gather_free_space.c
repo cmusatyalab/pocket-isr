@@ -35,6 +35,7 @@
 
 /* Command-line options */
 const char **exclude;
+const char *report_file;
 unsigned minsize = 4;  /* MiB */
 unsigned min_extent_kb = 4096;
 unsigned max_extent_count = 100000;
@@ -51,6 +52,7 @@ static const GOptionEntry options[] = {
 	{"test", 't', 0, G_OPTION_ARG_NONE, &dry_run, "Do everything except create the device", NULL},
 	{"quiet", 'q', 0, G_OPTION_ARG_NONE, &quiet, "Suppress summary information", NULL},
 	{"verbose", 'v', 0, G_OPTION_ARG_NONE, &verbose, "Be verbose", NULL},
+	{"report", 'r', 0, G_OPTION_ARG_FILENAME, &report_file, "Write YAML-formatted summary report to FILE", "FILE"},
 	{"dump", 'd', 0, G_OPTION_ARG_NONE, &log_extents, "Log every examined extent to stdout", NULL},
 	{NULL, 0, 0, 0, NULL, NULL, NULL}
 };
@@ -59,6 +61,7 @@ static const GOptionEntry options[] = {
 struct extent *extents;
 unsigned used_extents;
 unsigned min_extent_sectors;
+GString *report;
 
 /* Logging */
 
@@ -79,6 +82,7 @@ static G_GNUC_PRINTF(3, 4) void _log(gboolean do_squash, gboolean do_exit,
 
 #define msg(fmt, args...) _log(!verbose, FALSE, fmt, ## args)
 #define info(fmt, args...) _log(quiet, FALSE, fmt, ## args)
+#define warn(fmt, args...) _log(FALSE, FALSE, fmt, ## args)
 #define die(fmt, args...) _log(FALSE, TRUE, fmt, ## args)
 
 static void _dm_log(int level, const char *file, int line, const char *fmt,
@@ -107,6 +111,21 @@ static G_GNUC_PRINTF(4, 5) void _reject(const char *path, const char *fstype,
 		fprintf(stderr, "%s: ", path);
 		vfprintf(stderr, fmt, ap);
 		fprintf(stderr, ", skipping\n");
+		va_end(ap);
+	}
+	if (report != NULL) {
+		va_start(ap, fmt);
+		g_string_append_printf(report, "- device: %s\n", path);
+		g_string_append_printf(report, "  error: true\n");
+		g_string_append_printf(report, "  problem: ");
+		g_string_append_vprintf(report, fmt, ap);
+		g_string_append_printf(report, "\n");
+		if (fstype != NULL)
+			g_string_append_printf(report, "  filesystem: %s\n",
+						fstype);
+		if (sectors)
+			g_string_append_printf(report, "  size-kb: %"PRIu64
+						"\n", sectors / 2);
 		va_end(ap);
 	}
 }
@@ -637,6 +656,7 @@ int main(int argc, char **argv)
 	struct dm_task *task;
 	uint64_t accepted_sectors = 0;
 	uint64_t smallest_extent;
+	int ret = 0;
 
 	opt_ctx = g_option_context_new("NODE [DEVICE ...]");
 	g_option_context_set_summary(opt_ctx, "Collects free disk space "
@@ -659,6 +679,8 @@ int main(int argc, char **argv)
 		die("You must be root.");
 
 	extents = g_new(struct extent, max_extent_count);
+	if (report_file != NULL)
+		report = g_string_sized_new(0);
 
 	dm_log_init(_dm_log);
 	if (dm_device_exists(device_name))
@@ -691,21 +713,35 @@ int main(int argc, char **argv)
 	info("Total accepted: %"PRIu64" MB, %u extents, smallest %"
 				PRIu64" KB", accepted_sectors >> 11,
 				used_extents, smallest_extent >> 1);
-	if (minsize && (accepted_sectors >> 11) < minsize)
-		die("Minimum size requirement not met, aborting");
 
-	if (!dry_run && !dm_task_run(task))
-		die("Couldn't create device");
+	if (minsize && (accepted_sectors >> 11) < minsize) {
+		/* We still write out the report file, if requested */
+		warn("Minimum size requirement not met, aborting");
+		ret = 1;
+	} else if (dry_run) {
+		info("Test mode, not creating device");
+	} else {
+		if (!dm_task_run(task))
+			die("Couldn't create device");
+		info("Created device %s", device_name);
+	}
+
+	if (report != NULL) {
+		if (!strcmp("-", report_file)) {
+			printf("%s", report->str);
+		} else if (!g_file_set_contents(report_file, report->str,
+					report->len, &err)) {
+			warn("%s", err->message);
+			g_clear_error(&err);
+			ret = 1;
+		}
+		g_string_free(report, TRUE);
+	}
 
 	dm_task_destroy(task);
 	g_free(extents);
 	blkid_put_cache(blkid_cache);
 	g_tree_destroy(devices);
 
-	if (dry_run)
-		info("Test mode, not creating device");
-	else
-		info("Created device %s", device_name);
-
-	return 0;
+	return ret;
 }
