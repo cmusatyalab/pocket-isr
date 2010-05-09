@@ -102,6 +102,7 @@ static void _dm_log(int level, const char *file, int line, const char *fmt,
 			...)
 {
 	va_list ap;
+	gchar *msg;
 
 	(void) file;
 	(void) line;
@@ -109,8 +110,9 @@ static void _dm_log(int level, const char *file, int line, const char *fmt,
 	if (level > 4)
 		return;
 	va_start(ap, fmt);
-	vfprintf(stderr, fmt, ap);
-	fprintf(stderr, "\n");
+	msg = g_strdup_vprintf(fmt, ap);
+	warn("%s", msg);
+	g_free(msg);
 	va_end(ap);
 }
 
@@ -120,16 +122,9 @@ static G_GNUC_PRINTF(4, 5) void _reject(const char *path, const char *fstype,
 	va_list ap;
 	gchar *msg;
 
-	if (verbose) {
-		va_start(ap, fmt);
-		fprintf(stderr, "%s: ", path);
-		vfprintf(stderr, fmt, ap);
-		fprintf(stderr, ", skipping\n");
-		va_end(ap);
-	}
-
 	va_start(ap, fmt);
 	msg = g_strdup_vprintf(fmt, ap);
+	msg("%s: %s, skipping", path, msg);
 	report(1, "- device: %s", path);
 	report(2, "error: true");
 	report(2, "problem: %s", msg);
