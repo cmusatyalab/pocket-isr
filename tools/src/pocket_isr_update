@@ -844,7 +844,7 @@ class PocketISRUpdater(object):
 
 	def get_pref_dir(self):
 		# Returns the place to write preference data.
-		proc = subprocess.Popen(['check_isr_storage', '-q'],
+		proc = subprocess.Popen(['show_isr_storage', '-q'],
 					stdout = subprocess.PIPE)
 		mode = proc.communicate()[0].strip()
 		if mode == 'transient' and self.device_is_accessible():
