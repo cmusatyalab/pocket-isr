@@ -69,7 +69,7 @@ lvcreate -n swap -L "${swap_size}M" live-scratch >/dev/null
 lvcreate -n home -l "100%FREE" live-scratch >/dev/null
 
 # Format and mount home partition
-/sbin/mkfs.ext4 -q -E lazy_itable_init=1 /dev/live-scratch/home
+/sbin/mkfs.ext4 -q -m 0 -E lazy_itable_init=1 /dev/live-scratch/home
 mount /dev/live-scratch/home /home
 
 # Format and enable swap.  We use this to make the boot device hot-pluggable
