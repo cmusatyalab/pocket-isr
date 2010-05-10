@@ -1,0 +1,371 @@
+#!/usr/bin/python
+#
+# show_isr_storage - Display available Pocket ISR parcel storage
+#
+# Copyright (C) 2010 Carnegie Mellon University
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of version 2 of the GNU General Public License as published
+# by the Free Software Foundation.  A copy of the GNU General Public License
+# should have been distributed along with this program in the file
+# COPYING.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+# or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+# for more details.
+#
+
+import gtk
+import optparse
+import os
+import pango
+import pynotify
+import stat
+import yaml
+
+class InfoPopup(object):
+    POPUP_TIMEOUT = 15000
+    STORAGE_ICON = 'drive-harddisk'
+    ERROR_ICON = 'dialog-error'
+
+    def __init__(self, app):
+        self.app = app
+        self.terminate = True
+        if not pynotify.init(app.APP_NAME):
+            raise Exception("Couldn't initialize pynotify")
+
+    def show(self):
+        app = self.app
+        st = os.statvfs(app.ROOTDIR)
+        free_gb = st.f_bavail * st.f_frsize / (1 << 30)
+        icon = self.STORAGE_ICON
+        if app.mode == app.MODE_TRANSIENT:
+            head = "Using transient parcel storage"
+            body = ("Found %u GB of transient parcel storage.  Parcel " + \
+                        "data will become inaccessible after the system " + \
+                        "is shut down.") % free_gb
+        elif app.mode == app.MODE_PERSISTENT:
+            head = "Using persistent parcel storage"
+            body = ("Found persistent parcel storage with %u GB free.  " + \
+                        "Do not unplug the boot device until the system " + \
+                        "is shut down.") % free_gb
+        else:
+            head = "Can't store parcel data"
+            body = "Could not locate suitable storage for ISR parcel " + \
+                        "data.  Resuming a parcel is inadvisable."
+            icon = self.ERROR_ICON
+
+        self.popup = pynotify.Notification(head, body, icon)
+        if app.mode != app.MODE_NONE:
+            self.popup.set_category('device')
+            self.popup.set_timeout(self.POPUP_TIMEOUT)
+            self.popup.set_urgency(pynotify.URGENCY_LOW)
+        else:
+            self.popup.set_category('device.error')
+            self.popup.set_timeout(0)
+            self.popup.set_urgency(pynotify.URGENCY_CRITICAL)
+        self.popup.add_action('default', 'OK', self._popup_action)
+        if app.info is not None:
+            self.popup.add_action('details', 'Details', self._popup_action)
+        self.popup.connect('closed', self._popup_closed)
+        self.popup.show()
+        self.visible = True
+
+    def _popup_action(self, n, action):
+        if action == 'details':
+            self.terminate = False
+            self.app.show_details()
+        n.close()
+
+    def _popup_closed(self, n):
+        if self.terminate:
+            gtk.main_quit()
+
+class CapacityBar(gtk.Image):
+    COL_FRAME = '#000'
+    COL_ACCEPTED = '#fff'
+    COL_FREE = '#888'
+    COL_USED = '#000'
+    COL_ERROR = '#d00'
+
+    def __init__(self, scale, total, accepted = 0, free = 0, error = 0):
+        gtk.Image.__init__(self)
+        self.scale = scale
+        self.accepted = accepted
+        self.error = error
+        self.free = free
+        self.total = total
+        self.last_size = (0, 0)
+        self.set_size_request(0, 15)
+        self.set_alignment(0, 0.5)
+        self.connect('size-allocate', self.update)
+
+    def update(self, wid, alloc):
+        size = (alloc.width, alloc.height)
+        if size == self.last_size:
+            # Prevent infinite loops
+            return
+        self.last_size = size
+        self.set_from_pixmap(self.make_map(*size), None)
+
+    def make_map(self, width, height):
+        bar_width = max(int(width * self.scale), 1)
+        pix = gtk.gdk.Pixmap(None, bar_width, height, 24)
+        gc = pix.new_gc()
+        def draw_rect(color, size, fill = True):
+            if self.total != 0:
+                rect_width = int((bar_width - 1) * (float(size) / self.total))
+            else:
+                rect_width = 1
+            gc.set_foreground(gc.get_colormap().alloc_color(color))
+            pix.draw_rectangle(gc, fill, 0, 0, rect_width, height - 1)
+        draw_rect(self.COL_USED, self.total)
+        draw_rect(self.COL_FREE, self.free)
+        draw_rect(self.COL_ACCEPTED, self.accepted)
+        draw_rect(self.COL_ERROR, self.error)
+        draw_rect(self.COL_FRAME, self.total, fill = False)
+        return pix
+
+class VolumeDisplay(gtk.Alignment):
+    VOLUME_ICON = 'drive-harddisk'
+    FS_NAMES = {
+        'ntfs': 'NTFS',
+        'swap': 'Linux swap',
+        'vfat': 'FAT',
+    }
+    FS_FILTER = ('LVM2_member', 'lvm2pv')
+
+    def __init__(self, devices):
+        gtk.Alignment.__init__(self, 0, 0, 1, 0)
+        self.box = gtk.VBox()
+        self.add(self.box)
+
+        # Filter and sort device list
+        devices = [dev for dev in devices \
+                    if dev['filesystem'] not in self.FS_FILTER]
+        accepted = [dev for dev in devices if not dev['error']]
+        rejected = [dev for dev in devices if dev['error']]
+        for l in (accepted, rejected):
+            l.sort(key = lambda dev: dev['size-kb'], reverse = True)
+        self.devices = accepted + rejected
+
+        # Calculate cumulative volume sizes
+        self.max_size = 0
+        self.accepted_size = 0
+        self.total_size = 0
+        for dev in self.devices:
+            self.total_size += dev['size-kb']
+            if not dev['error']:
+                self.accepted_size += dev['accepted-kb']
+            if dev['size-kb'] > self.max_size:
+                self.max_size = dev['size-kb']
+
+        # Build a Pango attrlist for secondary labels
+        self.secondary_attrs = pango.AttrList()
+        self.secondary_attrs.insert(pango.AttrScale(pango.SCALE_SMALL,
+                                end_index = -1))
+
+        # Populate the box
+        for dev in self.devices:
+            self.add_row(dev)
+
+    def add_row(self, dev):
+        tbl = gtk.Table(3, 3)
+        tbl.set_border_width(5)
+
+        # Disk icon
+        icon = gtk.image_new_from_icon_name(self.VOLUME_ICON, 'dialog')
+        icon.set_sensitive(not dev['error'])
+        tbl.attach(icon, 1, 2, 1, 4, xoptions = 0)
+        tbl.set_col_spacing(1, 10)
+
+        # Capacity bar
+        total = dev['size-kb']
+        scale = float(total) / self.max_size
+        if dev['error']:
+            bar = CapacityBar(scale, total, error = total)
+        else:
+            bar = CapacityBar(scale, total, accepted = dev['accepted-kb'],
+                            free = dev['free-kb'])
+        tbl.attach(bar, 2, 4, 1, 2, yoptions = 0)
+
+        # Top left
+        msg = dev['filesystem']
+        if msg in self.FS_NAMES:
+            msg = self.FS_NAMES[msg]
+        lbl = gtk.Label(msg)
+        lbl.set_alignment(0, 0.5)
+        tbl.attach(lbl, 2, 3, 2, 3, ypadding = 4)
+
+        # Top right
+        total = dev['size-kb'] / 1024
+        if dev['error']:
+            msg = '0 of %d MB' % total
+        else:
+            msg = '%d of %d MB' % (dev['accepted-kb'] / 1024, total)
+        lbl = gtk.Label(msg)
+        lbl.set_alignment(1, 0.5)
+        tbl.attach(lbl, 3, 4, 2, 3, ypadding = 4)
+
+        # Bottom left
+        lbl = gtk.Label(dev['device'])
+        lbl.set_attributes(self.secondary_attrs)
+        lbl.set_alignment(0, 0.5)
+        tbl.attach(lbl, 2, 3, 3, 4)
+
+        # Bottom right
+        if dev['error']:
+            msg = dev['problem']
+        else:
+            msg = '%d of %d extents; %d MB rejected' % ( \
+                            dev['accepted-extents'], dev['free-extents'],
+                            (dev['free-kb'] - dev['accepted-kb']) / 1024)
+        lbl = gtk.Label(msg)
+        lbl.set_attributes(self.secondary_attrs)
+        lbl.set_alignment(1, 0.5)
+        tbl.attach(lbl, 3, 4, 3, 4)
+
+        # Ensure the left and right labels don't run into each other if
+        # the window is resized
+        tbl.set_col_spacing(2, 20)
+
+        # Add to box
+        if len(self.box.get_children()) > 0:
+            self.box.add(gtk.HSeparator())
+        self.box.add(tbl)
+
+    def get_sizes_mb(self):
+        return (self.accepted_size / 1024, self.total_size / 1024)
+
+class DetailsWindow(gtk.Window):
+    def __init__(self, app):
+        gtk.Window.__init__(self)
+        self.set_title(app.APP_NAME)
+        self.set_border_width(4)
+        self.connect('key-press-event', self.keypress)
+        self.connect('delete-event', lambda wid, ev: gtk.main_quit())
+
+        vbox = gtk.VBox()
+        self.add(vbox)
+
+        msg = 'Pocket ISR has discovered these volumes for temporary storage:'
+        lbl = gtk.Label(msg)
+        lbl.set_alignment(0, 0.5)
+        vbox.pack_start(lbl, expand = False, padding = 5)
+
+        scroll = gtk.ScrolledWindow()
+        scroll.set_policy('never', 'automatic')
+        vbox.add(scroll)
+
+        vdisp = VolumeDisplay(app.info['devices'])
+        scroll.add_with_viewport(vdisp)
+
+        msg = 'Total: %d of %d MB' % vdisp.get_sizes_mb()
+        if app.mode == app.MODE_NONE:
+            msg += ' (minimum requirement not met)'
+        lbl = gtk.Label(msg)
+        lbl.set_alignment(0, 0.5)
+        vbox.pack_start(lbl, expand = False, padding = 5)
+
+        self.set_default_size(600, 250)
+        self.show_all()
+        self.hide()
+
+    def keypress(self, wid, ev):
+        # Ideally this should be in an accelerator group
+        if ev.state == gtk.gdk.CONTROL_MASK and \
+                            ev.keyval == gtk.gdk.keyval_from_name('w'):
+            gtk.main_quit()
+            return True
+        return False
+
+class DetailsError(gtk.MessageDialog):
+    def __init__(self, app):
+        msg = 'Pocket ISR was not booted in transient mode.'
+        gtk.MessageDialog.__init__(self, type = 'error', buttons = 'ok',
+                                    message_format = msg)
+        self.set_title(app.APP_NAME)
+        self.set_skip_taskbar_hint(False)
+        self.connect('response', lambda dlg, resp: gtk.main_quit())
+        self.connect('close', lambda dlg: gtk.main_quit())
+
+class StorageChecker(object):
+    APP_NAME = 'Pocket ISR Storage'
+    APP_ICON = 'drive-harddisk'
+
+    ROOTDIR = '/home'
+    INFOFILE = '/var/lib/transient-storage-info'
+
+    MODE_NONE = 0
+    MODE_TRANSIENT = 1
+    MODE_PERSISTENT = 2
+
+    def __init__(self):
+        # Load INFOFILE, if present
+        try:
+            self.info = yaml.load(open(self.INFOFILE).read())
+            # Normalize basic device information
+            for dev in self.info['devices']:
+                if 'size-kb' not in dev:
+                    dev['size-kb'] = 0
+                if 'filesystem' not in dev:
+                    dev['filesystem'] = 'unknown'
+        except IOError:
+            self.info = None
+
+        # Find out if ROOTDIR is a mountpoint
+        dstat = os.stat(self.ROOTDIR)
+        if not stat.S_ISDIR(dstat.st_mode):
+            raise Exception(self.ROOTDIR + ' is not a directory')
+        pstat = os.stat(os.path.join(self.ROOTDIR, '..'))
+
+        if dstat.st_dev == pstat.st_dev:
+            # Not a mountpoint.  self.info may be present if
+            # gather_free_space ran and failed.
+            self.mode = self.MODE_NONE
+        elif self.info is not None:
+            self.mode = self.MODE_TRANSIENT
+        else:
+            self.mode = self.MODE_PERSISTENT
+
+        gtk.window_set_default_icon_name(self.APP_ICON)
+        self.popup = InfoPopup(self)
+        if self.info is not None:
+            self.details = DetailsWindow(self)
+        else:
+            self.details = DetailsError(self)
+
+    def show_popup(self):
+        self.popup.show()
+
+    def show_details(self):
+        self.details.show()
+
+    def print_mode(self):
+        if self.mode == self.MODE_TRANSIENT:
+            print 'transient'
+        elif self.mode == self.MODE_PERSISTENT:
+            print 'persistent'
+        else:
+            print 'none'
+
+
+if __name__ == '__main__':
+    parser = optparse.OptionParser(usage = '%prog [-hnq]')
+    parser.add_option('-n', '--notify', action = 'store_true',
+                        help = "Display a popup message summarizing " + \
+                        "available parcel storage")
+    parser.add_option('-q', '--query', action = 'store_true',
+                        help = "Print Pocket ISR storage mode and exit")
+    (opts, args) = parser.parse_args()
+
+    app = StorageChecker()
+    if opts.query:
+        app.print_mode()
+    elif opts.notify:
+        app.show_popup()
+        gtk.main()
+    else:
+        app.show_details()
+        gtk.main()
