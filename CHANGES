@@ -1,3 +1,11 @@
+====== 0.9.9-2 (2010-05-12)
+
+- Update VirtualBox OSE to 3.1.8
+- Add "Details" button to transient storage status popup
+- Fix Pocket ISR Update on USB keys formatted with ext2/3
+- Add CHANGES file to the root of the ISO image
+- Other minor improvements
+
 ====== 0.9.9-1 (2010-05-04)
 
 - Update OpenISR client to version 0.9.9
