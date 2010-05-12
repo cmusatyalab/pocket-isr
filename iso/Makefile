@@ -18,7 +18,9 @@ image: need_root
 	@# Regenerate the kickstart file every time, since REPO might be
 	@# set differently by the caller
 	sed -e 's|!!REPO!!|$(REPO)|g' -e 's/!!FVER!!/$(FVER)/g' \
-		-e 's/!!VERSION!!/$(VERSION)/g' $(KICKSTART).in > $(KICKSTART)
+		-e 's/!!VERSION!!/$(VERSION)/g' \
+		-e 's:!!TOP_SRCDIR!!:$(abspath ..):g' \
+		$(KICKSTART).in > $(KICKSTART)
 	mkdir -p $(OUTDIR)
 	ln -sf $(OUTDIR)/$(DESC).iso $(DESC).iso
 	setarch $(ARCH) livecd-creator -c $(KICKSTART) -f $(DESC) \

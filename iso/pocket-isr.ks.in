@@ -194,6 +194,10 @@ handle_file "$ENV{LIVE_ROOT}/isolinux/isolinux.cfg", 0;
 handle_file "$ENV{LIVE_ROOT}/EFI/boot/grub.conf", 1;
 %end
 
+%post --nochroot
+# Copy the CHANGES file to the root of the CD image
+cp !!TOP_SRCDIR!!/CHANGES $LIVE_ROOT/CHANGES
+
 %post
 # create /etc/sysconfig/desktop (needed for installation)
 cat >> /etc/sysconfig/desktop <<EOF
