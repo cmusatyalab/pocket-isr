@@ -1,5 +1,5 @@
 Name:           pocket-isr-tools
-Version:        1.1.2
+Version:        1.2
 Release:        1%{?dist}
 Summary:        Tools for Pocket ISR live image
 
@@ -55,6 +55,24 @@ rm -rf $RPM_BUILD_ROOT
 /sbin/chkconfig --del early-scratch-setup
 
 %changelog
+* Wed May 12 2010 Benjamin Gilbert <bgilbert@cs.cmu.edu> - 1.2-1
+- gather_free_space:
+  - Add -r/--report option to produce machine-readable results report
+  - Don't print invalid statistics if no extents are found
+- early-scratch-setup:
+  - Write transient storage report to /var/lib/transient-storage-info
+  - Exclude all LiveCD-specific devices from gather_free_space run (cosmetic)
+  - Create transient home partition with 0% reserved blocks
+- show_isr_storage:
+  - New application replacing check_isr_storage
+  - Add details window showing the composition of transient storage
+- Pocket ISR Update:
+  - Eliminate dependency on nscd
+- remount_live_volume:
+  - Change owner of USB device root directory to liveuser on ext[234]
+- Update package dependencies
+- Other minor improvements
+
 * Fri Mar 26 2010 Benjamin Gilbert <bgilbert@cs.cmu.edu> - 1.1.2-1
 - gather_free_space: Reject extents < 4 MB by default to reduce seek overhead
 - early-scratch-setup: Add min_extent_size kernel command-line parameter
