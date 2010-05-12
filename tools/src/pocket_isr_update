@@ -16,6 +16,7 @@
 # for more details.
 #
 
+import ctypes
 import dbus
 from dbus.mainloop.glib import DBusGMainLoop
 DBusGMainLoop(set_as_default=True)
@@ -667,6 +668,7 @@ class PocketISRUpdater(object):
 	APP_COPYRIGHT = 'Copyright \xc2\xa9 2010 Carnegie Mellon University'
 	APP_ICON = 'system-software-update'
 
+	LIBRESOLV = 'libresolv.so.2'
 	VERFILE = '/etc/pocket-isr-release'
 	CDFLAG = '/var/run/pocket-isr-on-cd'
 	DEVICENODE = '/dev/live'
@@ -696,6 +698,7 @@ class PocketISRUpdater(object):
 		self.notifier = None
 		self.have_info = False
 		self.have_notified = False
+		self.libresolv = ctypes.cdll.LoadLibrary(self.LIBRESOLV)
 
 		bus = dbus.SystemBus()
 		self.nm = bus.get_object('org.freedesktop.NetworkManager',
@@ -771,11 +774,13 @@ class PocketISRUpdater(object):
 		except URLError, e:
 			# If there's a DNS error the first time we try, we
 			# will continually end up back here unless nscd is
-			# running (RH#442172).  We could also solve this by
-			# trying to call glibc's res_init() from Python,
-			# but that's uglier.
+			# running (RH#442172).  Work around this by calling
+			# libresolv's res_init() to clear the library's
+			# DNS cache.
 			print "Couldn't fetch current version: " + \
 				e.reason[1]
+			if self.libresolv.__res_init() != 0:
+				print "Couldn't clear DNS cache"
 		except HTTPError, e:
 			print "Couldn't fetch current version: " + \
 				"server returned " + str(e.code)
