@@ -45,6 +45,13 @@ vfat)
 ext2|ext3|ext4)
 	mount $DEVICE $MOUNTPOINT
 	ret=$?
+	if [ $ret = 0 ] ; then
+		# Ensure that liveuser can at least write to the root
+		# directory of the filesystem, so that e.g. Pocket ISR Update
+		# can write settings files there
+		chown $USERID $MOUNTPOINT || die "Couldn't chown $MOUNTPOINT"
+		chmod u+w $MOUNTPOINT || die "Couldn't chmod $MOUNTPOINT"
+	fi
 	;;
 iso9660|udf)
 	echo "Refusing to mount CD-ROM filesystem on $MOUNTPOINT"
