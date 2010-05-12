@@ -1,0 +1,34 @@
+====== 0.9.9-1 (2010-05-04)
+
+- Update OpenISR client to version 0.9.9
+- Update VirtualBox OSE to 3.1.6
+
+====== 0.9.8-2 (2010-04-09)
+
+- Update kernel to fix boot failures on some systems
+
+====== 0.9.8-1 (2010-04-02)
+
+- Update OpenISR client to version 0.9.8
+
+====== 0.9.7-3 (2010-03-26)
+
+- Prevent Pocket ISR Update from being confused by captive portals
+- Update VirtualBox OSE to 3.0.14
+- Report additional statistics when setting up scratch volume
+- Allow scratch volume minimum extent size to be specified on kernel
+  command line
+- Other minor improvements
+
+====== 0.9.7-2 (2010-02-19)
+
+- Add Pocket ISR Update application
+- Add battery monitor and web browser icon to panel
+- Add support for bash auto-completion
+- Set the hostname to pocket-isr
+- Suppress VirtualBox warning messages for fullscreen mode, mouse grab, etc.
+- Suppress PackageKit update notifications
+
+====== 0.9.7-1 (2010-02-12)
+
+- First release
