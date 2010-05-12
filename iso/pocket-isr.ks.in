@@ -6,8 +6,6 @@
 # noswap - Don't enable swap partitions (we're using the scratch volume)
 bootloader --timeout=0 --append="live_ram scratch_volume nopersistenthome noswap"
 
-# pocket_isr_update needs nscd; see Red Hat #442172
-services --enabled=nscd
 firewall --disabled
 selinux --disabled
 # fedora-live-base.ks uses the Fedora repos corresponding to whatever
@@ -28,7 +26,6 @@ alsa-plugins-pulseaudio
 NetworkManager-gnome
 xcompmgr
 yum-utils
-nscd
 bash-completion
 # Needed to disable SELinux
 lokkit
