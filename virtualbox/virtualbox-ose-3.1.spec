@@ -14,7 +14,7 @@
 
 Summary: 	VirtualBox OSE
 Name: 		virtualbox-ose-3.1
-Version: 	3.1.6
+Version: 	3.1.8
 Release: 	1%{?dist}
 Group: 		Applications/System
 License:	GPLv2 and (GPLv2 or CDDL)
@@ -210,6 +210,9 @@ for m in vboxdrv vboxnetflt vboxnetadp; do
 done
 
 %changelog
+* Tue May 11 2010 Benjamin Gilbert <bgilbert@cs.cmu.edu> - 3.1.8-1
+- New upstream release
+
 * Mon May 03 2010 Benjamin Gilbert <bgilbert@cs.cmu.edu> - 3.1.6-1
 - Shift to VirtualBox 3.1 series
 - Drop 3.0-specific build patch
