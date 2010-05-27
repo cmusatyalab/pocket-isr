@@ -24,6 +24,7 @@ NetworkManager-gnome
 xcompmgr
 yum-utils
 bash-completion
+qemu-system-x86
 # Needed to disable SELinux
 lokkit
 
