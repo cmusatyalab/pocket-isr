@@ -249,8 +249,6 @@ class UpdateWindow(gtk.Window):
 		box.pack_start(buttonbox)
 
 		self.add(box)
-		self.show_all()
-		self.hide()
 
 	def next_phase(self, status):
 		# Automatically clears the cancel callback and sets the
@@ -469,7 +467,7 @@ class UpdateRunner(object):
 					'no such key {0}'.format(e))
 			self._bailout()
 			return
-		self.window.present()
+		self.window.show_all()
 		glib.idle_add(self._download_start)
 
 	def _download_start(self):

@@ -269,8 +269,6 @@ class DetailsWindow(gtk.Window):
         vbox.pack_start(lbl, expand = False, padding = 5)
 
         self.set_default_size(600, 250)
-        self.show_all()
-        self.hide()
 
     def keypress(self, wid, ev):
         # Ideally this should be in an accelerator group
@@ -340,7 +338,7 @@ class StorageChecker(object):
         self.popup.show()
 
     def show_details(self):
-        self.details.show()
+        self.details.show_all()
 
     def print_mode(self):
         if self.mode == self.MODE_TRANSIENT:
