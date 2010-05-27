@@ -1,4 +1,4 @@
-VERSION = 1
+VERSION = 2
 NAME = pocket-isr-artwork-$(VERSION)
 
 BACKGROUND_DIR = $(DESTDIR)/usr/share/backgrounds/isr

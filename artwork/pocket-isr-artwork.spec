@@ -1,5 +1,5 @@
 Name:           pocket-isr-artwork
-Version:        1
+Version:        2
 Release:        1%{?dist}
 Summary:        Pocket ISR artwork
 Group:          Applications/Multimedia
@@ -27,5 +27,8 @@ rm -rf $RPM_BUILD_ROOT
 %{_datadir}/backgrounds/isr
 
 %changelog
+* Wed May 26 2010 Benjamin Gilbert <bgilbert@cs.cmu.edu> - 2-1
+- Update for F13
+
 * Sun Jan 10 2010 Benjamin Gilbert <bgilbert@cs.cmu.edu> - 1-1
 - Initial package
