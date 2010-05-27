@@ -18,15 +18,15 @@ part / --size 3072 --fstype ext4
 services --enabled=NetworkManager --disabled=network,sshd
 
 # To compose against the current release tree, use the following "repo" (enabled by default)
-repo --name=released --mirrorlist=http://mirrors.fedoraproject.org/mirrorlist?repo=fedora-12&arch=$basearch
+repo --name=released --mirrorlist=http://mirrors.fedoraproject.org/mirrorlist?repo=fedora-13&arch=$basearch
 # To include updates, use the following "repo" (enabled by default)
-repo --name=updates --mirrorlist=http://mirrors.fedoraproject.org/mirrorlist?repo=updates-released-f12&arch=$basearch
+#repo --name=updates --mirrorlist=http://mirrors.fedoraproject.org/mirrorlist?repo=updates-released-f13&arch=$basearch
 
 # To compose against rawhide, use the following "repo" (disabled by default)
 #repo --name=rawhide --mirrorlist=http://mirrors.fedoraproject.org/mirrorlist?repo=rawhide&arch=$basearch
 
 # To compose against local trees, (edit and) use:
-#repo --name=f12 --baseurl=http://localrepo/fedora/releases/12/Everything/$basearch/os/
+#repo --name=f11 --baseurl=http://localrepo/fedora/releases/11/Everything/$basearch/os/
 
 %packages
 @base-x
@@ -296,7 +296,7 @@ touch /.liveimg-late-configured
 for o in \`cat /proc/cmdline\` ; do
     case \$o in
     ks=*)
-        ks="\${o#ks=}"
+        ks="--kickstart=\${o#ks=}"
         ;;
     xdriver=*)
         xdriver="--set-driver=\${o#xdriver=}"
@@ -388,12 +388,14 @@ chmod 755 /etc/rc.d/init.d/livesys-late
 # work around for poor key import UI in PackageKit
 rm -f /var/lib/rpm/__db*
 rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-fedora
+echo "Packages within this LiveCD"
+rpm -qa
 
 # go ahead and pre-make the man -k cache (#455968)
 /usr/sbin/makewhatis -w
 
 # save a little bit of space at least...
-rm -f /boot/initrd*
+rm -f /boot/initramfs*
 # make sure there aren't core files lying around
 rm -f /core*
 

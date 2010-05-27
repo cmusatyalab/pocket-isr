@@ -8,9 +8,6 @@ bootloader --timeout=0 --append="live_ram scratch_volume nopersistenthome noswap
 
 firewall --disabled
 selinux --disabled
-# fedora-live-base.ks uses the Fedora repos corresponding to whatever
-# Fedora release we're running on.  Do the same for the OpenISR repository
-# to ensure that we're pulling packages from the right place.
 repo --name=openisr --baseurl=http://isr.cmu.edu/software/fedora/fc!!FVER!!/$basearch/
 repo --name=pocket-isr --baseurl=!!REPO!!
 
@@ -46,6 +43,9 @@ notification-daemon
 # Prevent dmsquash-live Dracut module from kicking the initial boot
 # device off the USB bus when live_ram is enabled
 -eject
+
+# The D-Bus session bus won't start without this
+dbus-x11
 
 # Remove things we don't need
 -@dial-up
@@ -84,7 +84,6 @@ notification-daemon
 -paktype*fonts*
 -thai*fonts*
 # Other
--bitmap-fonts
 -nss_db
 -sendmail
 ssmtp
@@ -223,10 +222,10 @@ rpm -qad '!(open|pocket-)isr*' | xargs rm -f
 
 # Set default desktop background for newly-created accounts
 mkdir -p /etc/skel/.config/pcmanfm
-cat > /etc/skel/.config/pcmanfm/main.lxde <<EOF
-[Desktop]
-wallpaper=/usr/share/backgrounds/isr/standard.png
-show_wallpaper=1
+cat > /etc/skel/.config/pcmanfm/pcmanfm.conf <<EOF
+[desktop]
+wallpaper=/usr/share/backgrounds/isr/standard.jpg
+wallpaper_mode=1
 EOF
 
 # Configure desktop panel for newly-created accounts
@@ -390,7 +389,7 @@ cat >> /etc/xdg/lxsession/LXDE/autostart << FOE
 @lxde-settings-daemon
 @pulseaudio -D
 @lxpanel --profile LXDE
-@pcmanfm -d
+@pcmanfm -d --desktop
 show_isr_storage -n
 pocket_isr_update
 FOE
