@@ -2,8 +2,11 @@ standard:
 	Authors: Matt Toups <mtoups@cs.cmu.edu>
 		 Benjamin Gilbert <bgilbert@cs.cmu.edu>
 	Balloon: http://en.wikipedia.org/wiki/File:Eagle.moving.north.png
-	Background: constantine
+	Background: goddard
 
-constantine:
-	Author: Máirín Duffy <duffy@fedoraproject.org>
-	bokeh: http://www.flickr.com/photos/yourbartender/49642451/
+goddard:
+	Authors: Máirín Duffy <duffy@fedoraproject.org>
+	         Kyle Baker <kybaker@redhat.com>
+	XCF sources: https://fedoraproject.org/w/uploads/4/42/1280x1024.xcf
+	             https://fedoraproject.org/w/uploads/1/12/2048x1536.xcf
+	             https://fedoraproject.org/w/uploads/5/58/1920x1200.xcf
