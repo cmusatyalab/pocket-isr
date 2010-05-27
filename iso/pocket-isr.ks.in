@@ -378,6 +378,20 @@ Plugin {
 }
 EOF
 
+# Create empty, passwordless GNOME keyring for newly-created accounts.
+# This prevents the user from being prompted to set a keyring password when
+# they join a password-protected wireless network.
+mkdir -p /etc/skel/.gnome2/keyrings
+echo -n default > /etc/skel/.gnome2/keyrings/default
+cat > /etc/skel/.gnome2/keyrings/default.keyring <<EOF
+[keyring]
+display-name=Default
+ctime=0
+mtime=0
+lock-on-idle=false
+lock-after=false
+EOF
+
 # Record Pocket ISR version for pocket_isr_update
 echo "!!VERSION!!" > /etc/pocket-isr-release
 
