@@ -1,5 +1,5 @@
 Name:           pocket-isr-tools
-Version:        1.2
+Version:        1.2.1
 Release:        1%{?dist}
 Summary:        Tools for Pocket ISR live image
 
@@ -55,6 +55,12 @@ rm -rf $RPM_BUILD_ROOT
 /sbin/chkconfig --del early-scratch-setup
 
 %changelog
+* Tue Jun 01 2010 Benjamin Gilbert <bgilbert@cs.cmu.edu> - 1.2.1-1
+- show_isr_storage:
+  - Fix window flickering at program startup on F13
+- Pocket ISR Update:
+  - Fix window flickering when starting update on F13
+
 * Wed May 12 2010 Benjamin Gilbert <bgilbert@cs.cmu.edu> - 1.2-1
 - gather_free_space:
   - Add -r/--report option to produce machine-readable results report
