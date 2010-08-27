@@ -13,8 +13,8 @@
 %undefine _missing_build_ids_terminate_build
 
 Summary: 	VirtualBox OSE
-Name: 		virtualbox-ose-3.1
-Version: 	3.1.8
+Name: 		virtualbox-ose-3.2
+Version: 	3.2.8
 Release: 	1%{?dist}
 Group: 		Applications/System
 License:	GPLv2 and (GPLv2 or CDDL)
@@ -210,6 +210,9 @@ for m in vboxdrv vboxnetflt vboxnetadp; do
 done
 
 %changelog
+* Fri Aug 27 2010 Benjamin Gilbert <bgilbert@cs.cmu.edu> - 3.2.8-1
+- New upstream release
+
 * Tue May 11 2010 Benjamin Gilbert <bgilbert@cs.cmu.edu> - 3.1.8-1
 - New upstream release
 
