@@ -70,6 +70,11 @@ lvcreate -n home -l "100%FREE" live-scratch >/dev/null
 
 # Format and mount home partition
 /sbin/mkfs.ext4 -q -m 0 -E lazy_itable_init=1 /dev/live-scratch/home
+# Configure mount options for /home to ensure that useradd doesn't fail when
+# copying extended attributes on files in /etc/skel.  Set default mount
+# options, rather than giving the options directly to /sbin/mount, to avoid
+# surprises if the filesystem is remounted.
+tune2fs -o user_xattr,acl /dev/live-scratch/home > /dev/null
 mount /dev/live-scratch/home /home
 
 # Format and enable swap.  We use this to make the boot device hot-pluggable
