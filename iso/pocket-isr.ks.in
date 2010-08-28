@@ -220,7 +220,15 @@ mv /usr/lib/locale/locale-archive /usr/lib/locale/locale-archive.tmpl
 rpm -qad '!(open|pocket-)isr*' | xargs rm -f
 
 # Remove GTK icon caches to save space
-rm -f /usr/share/icons/*/icon-theme.cache 
+rm -f /usr/share/icons/*/icon-theme.cache
+
+# Replace lxde-logout wrapper script with one that doesn't show the
+# Hot Dog Linux logo in the logout window
+cat > /usr/bin/lxde-logout <<EOF
+#!/bin/sh
+lxsession-logout \
+	--prompt='<span size="large" weight="bold">Exit Pocket ISR?</span>'
+EOF
 
 # Set default desktop background for newly-created accounts
 mkdir -p /etc/skel/.config/pcmanfm
