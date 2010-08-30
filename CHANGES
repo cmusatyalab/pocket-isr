@@ -1,3 +1,10 @@
+====== 0.9.10-1 (2010-08-30)
+
+- Update OpenISR client to version 0.9.10
+- Update VirtualBox OSE to 3.2.8
+- Allow SSH host keys to be provided on the boot device in .ssh-known-hosts
+- Fixes for recent Generic 13 updates
+
 ====== 0.9.9-3 (2010-06-01)
 
 - Update base operating system to Generic 13
