@@ -196,6 +196,29 @@ handle_file "$ENV{LIVE_ROOT}/EFI/boot/grub.conf", 1;
 # Copy the CHANGES file to the root of the CD image
 cp !!TOP_SRCDIR!!/CHANGES $LIVE_ROOT/CHANGES
 
+# Work around an interaction between dracut and udev in late Fedora 13 that
+# causes /dev/live to be missing because udev is retriggered and deletes the
+# link.  This should be unnecessary in Fedora 14.
+#
+# Postinst scripts run after the initramfs has already been copied to the
+# LIVE_ROOT, so we can't simply add a module to /usr/share/dracut/modules.d.
+# Amend the initramfs instead.
+tmp=`mktemp -d`
+pushd $tmp
+gunzip -c $LIVE_ROOT/isolinux/initrd0.img > cpio
+mkdir pre-pivot
+cat > pre-pivot/50fix-dev-live.sh <<'EOF'
+if [ -f /etc/udev/rules.d/99-live-mount.rules ] ; then
+	grep -v /sbin/initqueue /etc/udev/rules.d/99-live-mount.rules > \
+		/sysroot/etc/udev/rules.d/99-dev-live.rules
+fi
+EOF
+echo "pre-pivot/50fix-dev-live.sh" | cpio -oA -F cpio -H newc
+gzip -9 -c cpio > $LIVE_ROOT/isolinux/initrd0.img
+popd
+rm -r $tmp
+%end
+
 %post
 # create /etc/sysconfig/desktop (needed for installation)
 cat >> /etc/sysconfig/desktop <<EOF
