@@ -471,6 +471,11 @@ usermod -a -G isrusers,vboxusers liveuser
 if [ -f /mnt/live/.openisrrc ] ; then
 	cp /mnt/live/.openisrrc /home/liveuser/.openisrrc
 fi
+if [ -f /mnt/live/.ssh-known-hosts ] ; then
+	mkdir -p /home/liveuser/.ssh
+	chmod 700 /home/liveuser/.ssh
+	cp /mnt/live/.ssh-known-hosts /home/liveuser/.ssh/known_hosts
+fi
 
 # If we booted from CD rather than a USB device, record this so Pocket ISR
 # Update won't prompt to rewrite the device.  We need to do this now because
