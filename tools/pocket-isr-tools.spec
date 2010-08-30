@@ -1,5 +1,5 @@
 Name:           pocket-isr-tools
-Version:        1.2.1
+Version:        1.2.2
 Release:        1%{?dist}
 Summary:        Tools for Pocket ISR live image
 
@@ -55,6 +55,10 @@ rm -rf $RPM_BUILD_ROOT
 /sbin/chkconfig --del early-scratch-setup
 
 %changelog
+* Mon Aug 30 2010 Benjamin Gilbert <bgilbert@cs.cmu.edu> - 1.2.2-1
+- early-scratch-setup:
+  - Enable user_xattr and acl options when mounting transient home partition
+
 * Tue Jun 01 2010 Benjamin Gilbert <bgilbert@cs.cmu.edu> - 1.2.1-1
 - show_isr_storage:
   - Fix window flickering at program startup on F13
