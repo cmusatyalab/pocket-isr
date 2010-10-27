@@ -219,6 +219,8 @@ mv /usr/lib/locale/locale-archive /usr/lib/locale/locale-archive.tmpl
 
 # Remove docfiles for non-ISR packages
 rpm -qad '!(open|pocket-)isr*' | xargs rm -f
+# Now regenerate the man database
+mandb
 
 # Remove GTK icon caches to save space
 rm -f /usr/share/icons/*/icon-theme.cache
