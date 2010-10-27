@@ -14,7 +14,7 @@
 
 Summary: 	VirtualBox OSE
 Name: 		virtualbox-ose-3.2
-Version: 	3.2.8
+Version: 	3.2.10
 Release: 	1%{?dist}
 Group: 		Applications/System
 License:	GPLv2 and (GPLv2 or CDDL)
@@ -23,7 +23,7 @@ BuildRequires:	gcc-c++ dev86 iasl openssl-devel libxml2-devel libxslt-devel
 BuildRequires:	libXcursor-devel qt-devel libIDL-devel SDL-devel
 BuildRequires:	alsa-lib-devel pulseaudio-libs-devel hal-devel libcap-devel
 BuildRequires:	python-devel gsoap-devel libXmu-devel mesa-libGL-devel
-BuildRequires:	mesa-libGLU-devel libcurl-devel
+BuildRequires:	mesa-libGLU-devel libcurl-devel libstdc++-static
 BuildRoot:	%{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 
 Requires:	gcc binutils make dkms chkconfig /usr/sbin/groupadd
@@ -210,6 +210,11 @@ for m in vboxdrv vboxnetflt vboxnetadp; do
 done
 
 %changelog
+* Wed Oct 27 2010 Benjamin Gilbert <bgilbert@cs.cmu.edu> - 3.2.10-1
+- New upstream release
+- Add libstdc++-static dependency for F14
+- Disable -Werror to avoid build failures with gcc 4.5
+
 * Fri Aug 27 2010 Benjamin Gilbert <bgilbert@cs.cmu.edu> - 3.2.8-1
 - New upstream release
 
