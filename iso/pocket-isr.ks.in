@@ -124,6 +124,7 @@ virtualbox-ose-3.2
 use strict;
 use warnings;
 
+my $all_remove = "rd_NO_MD|rd_NO_DM";
 my $persist_remove = "live_ram|scratch_volume|nopersistenthome|noswap";
 my $persist_suffix = "using persistent parcel storage";
 
@@ -165,7 +166,9 @@ sub handle_file {
 	my $need_label = "";
 	my $drop_stanza = 0;
 	my @labelopts;
-	for my $line (@data, "label END") {
+	push @data, "label END";
+	for my $line (@data) {
+		$line =~ s/ ($all_remove)(?= )//g;
 		if ($line =~ /^(label|title)\s+(.*)$/) {
 			my $label = $2;
 			write_stanza(\*FD, $need_label, $is_efi, @labelopts)
