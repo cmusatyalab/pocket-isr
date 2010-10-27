@@ -25,6 +25,7 @@ xcompmgr
 yum-utils
 bash-completion
 qemu-system-x86
+lvm2
 # Needed to disable SELinux
 lokkit
 
@@ -195,28 +196,6 @@ handle_file "$ENV{LIVE_ROOT}/EFI/boot/grub.conf", 1;
 %post --nochroot
 # Copy the CHANGES file to the root of the CD image
 cp !!TOP_SRCDIR!!/CHANGES $LIVE_ROOT/CHANGES
-
-# Work around an interaction between dracut and udev in late Fedora 13 that
-# causes /dev/live to be missing because udev is retriggered and deletes the
-# link.  This should be unnecessary in Fedora 14.
-#
-# Postinst scripts run after the initramfs has already been copied to the
-# LIVE_ROOT, so we can't simply add a module to /usr/share/dracut/modules.d.
-# Amend the initramfs instead.
-tmp=`mktemp -d`
-pushd $tmp
-gunzip -c $LIVE_ROOT/isolinux/initrd0.img > cpio
-mkdir pre-pivot
-cat > pre-pivot/50fix-dev-live.sh <<'EOF'
-if [ -f /etc/udev/rules.d/99-live-mount.rules ] ; then
-	grep -v /sbin/initqueue /etc/udev/rules.d/99-live-mount.rules > \
-		/sysroot/etc/udev/rules.d/99-dev-live.rules
-fi
-EOF
-echo "pre-pivot/50fix-dev-live.sh" | cpio -oA -F cpio -H newc
-gzip -9 -c cpio > $LIVE_ROOT/isolinux/initrd0.img
-popd
-rm -r $tmp
 %end
 
 %post
@@ -228,9 +207,8 @@ EOF
 
 # We needed DKMS and development packages to build the kernel modules.
 # This has already happened by now, so remove them again to save space.
-# openisr-client and virtualbox-ose depend on dkms, gcc, and make, so
-# ignore dependencies when removing those packages.  Remove *their*
-# dependencies in the normal way.
+# virtualbox-ose depends on dkms, gcc, and make, so ignore dependencies when
+# removing those packages.  Remove *their* dependencies in the normal way.
 rpm -e --nodeps dkms gcc make
 yum remove -y glibc-devel glibc-headers kernel-devel kernel-headers cpp
 
@@ -448,15 +426,6 @@ default_user		liveuser
 xserver_arguments	-nolisten tcp
 FOE
 
-# Disable PackageKit checking, since fedora-live-base.ks doesn't do this
-# correctly
-gconftool-2 --direct --config-source=xml:readwrite:/etc/gconf/gconf.xml.defaults -s -t string /apps/gnome-packagekit/update-icon/frequency_get_updates never >/dev/null
-gconftool-2 --direct --config-source=xml:readwrite:/etc/gconf/gconf.xml.defaults -s -t string /apps/gnome-packagekit/update-icon/frequency_get_upgrades never >/dev/null
-gconftool-2 --direct --config-source=xml:readwrite:/etc/gconf/gconf.xml.defaults -s -t string /apps/gnome-packagekit/update-icon/frequency_refresh_cache never >/dev/null
-gconftool-2 --direct --config-source=xml:readwrite:/etc/gconf/gconf.xml.defaults -s -t bool /apps/gnome-packagekit/update-icon/notify_available false >/dev/null
-gconftool-2 --direct --config-source=xml:readwrite:/etc/gconf/gconf.xml.defaults -s -t bool /apps/gnome-packagekit/update-icon/notify_critical false >/dev/null
-gconftool-2 --direct --config-source=xml:readwrite:/etc/gconf/gconf.xml.defaults -s -t bool /apps/gnome-packagekit/update-icon/notify_distro_upgrades false >/dev/null
-
 # Set the default browser to Midori
 gconftool-2 --direct --config-source=xml:readwrite:/etc/gconf/gconf.xml.defaults -s -t string /desktop/gnome/url-handlers/http/command "midori %s" >/dev/null
 gconftool-2 --direct --config-source=xml:readwrite:/etc/gconf/gconf.xml.defaults -s -t string /desktop/gnome/url-handlers/https/command "midori %s" >/dev/null
@@ -465,7 +434,7 @@ gconftool-2 --direct --config-source=xml:readwrite:/etc/gconf/gconf.xml.defaults
 sed -i 's/^HOSTNAME=.*/HOSTNAME=pocket-isr/' /etc/sysconfig/network
 
 # Add liveuser to necessary system groups
-usermod -a -G isrusers,vboxusers liveuser
+usermod -a -G vboxusers liveuser
 
 # Copy OpenISR user configuration from the boot disk, if present
 if [ -f /mnt/live/.openisrrc ] ; then

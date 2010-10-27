@@ -17,16 +17,10 @@ xconfig --startxonboot
 part / --size 3072 --fstype ext4
 services --enabled=NetworkManager --disabled=network,sshd
 
-# To compose against the current release tree, use the following "repo" (enabled by default)
-repo --name=released --mirrorlist=http://mirrors.fedoraproject.org/mirrorlist?repo=fedora-13&arch=$basearch
-# To include updates, use the following "repo" (enabled by default)
-repo --name=updates --mirrorlist=http://mirrors.fedoraproject.org/mirrorlist?repo=updates-released-f13&arch=$basearch
-
-# To compose against rawhide, use the following "repo" (disabled by default)
 #repo --name=rawhide --mirrorlist=http://mirrors.fedoraproject.org/mirrorlist?repo=rawhide&arch=$basearch
-
-# To compose against local trees, (edit and) use:
-#repo --name=f11 --baseurl=http://localrepo/fedora/releases/11/Everything/$basearch/os/
+repo --name=fedora --mirrorlist=http://mirrors.fedoraproject.org/mirrorlist?repo=fedora-14&arch=$basearch
+repo --name=updates --mirrorlist=http://mirrors.fedoraproject.org/mirrorlist?repo=updates-released-f14&arch=$basearch
+#repo --name=updates-testing --mirrorlist=http://mirrors.fedoraproject.org/mirrorlist?repo=updates-testing-f14&arch=$basearch
 
 %packages
 @base-x
@@ -34,58 +28,27 @@ repo --name=updates --mirrorlist=http://mirrors.fedoraproject.org/mirrorlist?rep
 @core
 @fonts
 @input-methods
+# use a small pinyin db for live
+-ibus-pinyin-db-open-phrase
+ibus-pinyin-db-android
 @admin-tools
 @dial-up
 @hardware-support
 @printing
+
+# Explicitly specified here:
+# <notting> walters: because otherwise dependency loops cause yum issues.
 kernel
+
+# This was added a while ago, I think it falls into the category of
+# "Diagnosis/recovery tool useful from a Live OS image".  Leaving this untouched
+# for now.
 memtest86+
 
-#firstaidkit-plugin-all
-
-# save some space
--specspo
--esc
--samba-client
--a2ps
--mpage
--redhat-lsb
--sox
--hplip
--hpijs
-sendmail
-#ssmtp
--numactl
--isdn4k-utils
--autofs
-# smartcards won't really work on the livecd.
--coolkey
--ccid
-# duplicate functionality
--pinfo
--vorbis-tools
--wget
-# lose the compat stuff
--compat*
-
-# qlogic firmwares
--ql2100-firmware
--ql2200-firmware
--ql23xx-firmware
--ql2400-firmware
-
-# scanning takes quite a bit of space :/
--xsane
--xsane-gimp
--sane-backends
-
-# livecd bits to set up the livecd and be able to install
+# The point of a live image is to install
 anaconda
 isomd5sum
 
-# commented out to avoid warning
-# # make sure debuginfo doesn't end up on the live image
-#-*debuginfo
 %end
 
 %post
@@ -213,6 +176,13 @@ passwd -d liveuser > /dev/null
 
 # turn off firstboot for livecd boots
 chkconfig --level 345 firstboot off 2>/dev/null
+# We made firstboot a native systemd service, so it can no longer be turned
+# off with chkconfig. It should be possible to turn it off with systemctl, but
+# that doesn't work right either. For now, this is good enough: the firstboot
+# service will start up, but this tells it not to run firstboot. I suspect the
+# other services 'disabled' below are not actually getting disabled properly,
+# with systemd, but we can look into that later. - AdamW 2010/08 F14Alpha
+echo "RUN_FIRSTBOOT=NO" > /etc/sysconfig/firstboot
 
 # don't start yum-updatesd for livecd boots
 chkconfig --level 345 yum-updatesd off 2>/dev/null
@@ -224,11 +194,11 @@ chkconfig --level 345 mdmonitor off 2>/dev/null
 chkconfig --level 345 setroubleshoot off 2>/dev/null
 
 # don't do packagekit checking by default
-gconftool-2 --direct --config-source=xml:readwrite:/etc/gconf/gconf.xml.defaults -s -t string /apps/gnome-packagekit/frequency_get_updates never >/dev/null
-gconftool-2 --direct --config-source=xml:readwrite:/etc/gconf/gconf.xml.defaults -s -t string /apps/gnome-packagekit/frequency_get_upgrades never >/dev/null
-gconftool-2 --direct --config-source=xml:readwrite:/etc/gconf/gconf.xml.defaults -s -t string /apps/gnome-packagekit/frequency_refresh_cache never >/dev/null
-gconftool-2 --direct --config-source=xml:readwrite:/etc/gconf/gconf.xml.defaults -s -t bool /apps/gnome-packagekit/notify_available false >/dev/null
-gconftool-2 --direct --config-source=xml:readwrite:/etc/gconf/gconf.xml.defaults -s -t bool /apps/gnome-packagekit/notify_distro_upgrades false >/dev/null
+gconftool-2 --direct --config-source=xml:readwrite:/etc/gconf/gconf.xml.defaults -s -t string /apps/gnome-packagekit/update-icon/frequency_get_updates never >/dev/null
+gconftool-2 --direct --config-source=xml:readwrite:/etc/gconf/gconf.xml.defaults -s -t string /apps/gnome-packagekit/update-icon/frequency_get_upgrades never >/dev/null
+gconftool-2 --direct --config-source=xml:readwrite:/etc/gconf/gconf.xml.defaults -s -t string /apps/gnome-packagekit/update-icon/frequency_refresh_cache never >/dev/null
+gconftool-2 --direct --config-source=xml:readwrite:/etc/gconf/gconf.xml.defaults -s -t bool /apps/gnome-packagekit/update-icon/notify_available false >/dev/null
+gconftool-2 --direct --config-source=xml:readwrite:/etc/gconf/gconf.xml.defaults -s -t bool /apps/gnome-packagekit/update-icon/notify_distro_upgrades false >/dev/null
 gconftool-2 --direct --config-source=xml:readwrite:/etc/gconf/gconf.xml.defaults -s -t bool /apps/gnome-packagekit/enable_check_firmware false >/dev/null
 gconftool-2 --direct --config-source=xml:readwrite:/etc/gconf/gconf.xml.defaults -s -t bool /apps/gnome-packagekit/enable_check_hardware false >/dev/null
 gconftool-2 --direct --config-source=xml:readwrite:/etc/gconf/gconf.xml.defaults -s -t bool /apps/gnome-packagekit/enable_codec_helper false >/dev/null
@@ -299,66 +269,10 @@ for o in \`cat /proc/cmdline\` ; do
         ks="--kickstart=\${o#ks=}"
         ;;
     xdriver=*)
-        xdriver="--set-driver=\${o#xdriver=}"
+        xdriver="\${o#xdriver=}"
         ;;
     esac
 done
-
-# this is a bad hack to work around #460581 for the geode
-# purely to help move testing along for now
-if [ \`grep -c Geode /proc/cpuinfo\` -ne 0 ]; then
-  cat > /etc/X11/xorg.conf <<FOE
-Section "ServerLayout"
-	Identifier     "Default Layout"
-	Screen      0  "Screen0" 0 0
-	InputDevice    "Keyboard0" "CoreKeyboard"
-EndSection
-
-Section "InputDevice"
-# keyboard added by rhpxl
-	Identifier  "Keyboard0"
-	Driver      "kbd"
-	Option	    "XkbModel" "pc105"
-	Option	    "XkbLayout" "us"
-EndSection
-
-Section "Monitor"
-	Identifier  "Monitor0"
-	HorizSync   30-67
-	VertRefresh 48-52
-	DisplaySize 152 114
-	Mode "1200x900"
-		DotClock 57.275
-		HTimings 1200 1208 1216 1240
-		VTimings 900 905 908 912
-		Flags    "-HSync" "-VSync"
-	EndMode
-EndSection
-
-Section "Device"
-	Identifier  "Videocard0"
-	Driver      "amd"
-	VendorName  "Advanced Micro Devices, Inc."
-	BoardName   "AMD Geode GX/LX"
-
-	Option     "AccelMethod" "EXA"
-	Option     "NoCompression" "true"
-        Option     "MigrationHeuristic" "greedy"
-	Option     "PanelGeometry" "1200x900"
-EndSection
-
-Section "Screen"
-	Identifier "Screen0"
-	Device     "Videocard0"
-	Monitor    "Monitor0"
-	DefaultDepth 16
-	SubSection "Display"
-		Depth   16
-		Modes   "1200x900"
-	EndSubSection
-EndSection
-FOE
-fi
 
 # if liveinst or textinst is given, start anaconda
 if strstr "\`cat /proc/cmdline\`" liveinst ; then
@@ -372,7 +286,12 @@ fi
 
 # configure X, allowing user to override xdriver
 if [ -n "\$xdriver" ]; then
-   exists system-config-display --noui --reconfig --set-depth=24 \$xdriver
+   cat > /etc/X11/xorg.conf.d/00-xdriver.conf <<FOE
+Section "Device"
+	Identifier	"Videocard0"
+	Driver	"\$xdriver"
+EndSection
+FOE
 fi
 
 EOF
@@ -392,19 +311,22 @@ echo "Packages within this LiveCD"
 rpm -qa
 
 # go ahead and pre-make the man -k cache (#455968)
-/usr/sbin/makewhatis -w
+/usr/bin/mandb
 
 # save a little bit of space at least...
 rm -f /boot/initramfs*
 # make sure there aren't core files lying around
 rm -f /core*
 
+# convince readahead not to collect
+rm -f /.readahead_collect
+touch /var/lib/readahead/early.sorted
+
 %end
 
 
 %post --nochroot
 cp $INSTALL_ROOT/usr/share/doc/*-release-*/GPL $LIVE_ROOT/GPL
-cp $INSTALL_ROOT/usr/share/doc/HTML/readme-live-image/en_US/readme-live-image-en_US.txt $LIVE_ROOT/README
 
 # only works on x86, x86_64
 if [ "$(uname -i)" = "i386" -o "$(uname -i)" = "x86_64" ]; then
