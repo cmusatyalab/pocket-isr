@@ -1,4 +1,4 @@
-VERSION = 2
+VERSION = 3
 NAME = pocket-isr-artwork-$(VERSION)
 
 BACKGROUND_DIR = $(DESTDIR)/usr/share/backgrounds/isr
@@ -11,6 +11,6 @@ install:
 
 dist:
 	mkdir -p $(NAME)
-	cp -a COPYING Credits Makefile standard.jpg $(NAME)
+	cp -a "CC-BY-SA 3.0" Attribution Makefile standard.jpg $(NAME)
 	tar czf $(NAME).tar.gz $(NAME)
 	rm -rf $(NAME)
