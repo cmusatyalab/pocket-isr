@@ -119,8 +119,7 @@ virtualbox-ose-3.2
 %end
 
 %post --nochroot --interpreter /usr/bin/perl
-# Add -persist entries to syslinux menu, remove "Verify and Boot" entries,
-# and disable menu hiding
+# Rewrite boot loader menus for Pocket ISR
 use strict;
 use warnings;
 
@@ -128,72 +127,66 @@ my $all_remove = "rd_NO_MD|rd_NO_DM";
 my $persist_remove = "live_ram|scratch_volume|nopersistenthome|noswap";
 my $persist_suffix = "using persistent parcel storage";
 
-sub write_stanza {
-	my $fd = shift;
-	my $label = shift;
-	my $is_efi = shift;
-	my @opts = @_;
+sub make_persist_stanza {
+	my @lines = @_;
 
-	if ($is_efi) {
-		print $fd "title $label\n";
-	} else {
-		print $fd "label $label\n";
-	}
-	for my $line (@opts) {
-		if ($line =~ /menu label/) {
-			print $fd "$line $persist_suffix\n";
-		} elsif ($line =~ /menu default/) {
-			next;
-		} else {
-			$line =~ s/ ($persist_remove)(?= )//g;
-			print $fd "$line\n";
-		}
-	}
+	# Amend the title or label
+	$lines[0] .= "-persist";
+	# Add $persist_suffix to the menu label
+	@lines = map(scalar(s/.*menu label.*/$& $persist_suffix/, $_), @lines);
+	# Drop any "menu default" line
+	@lines = grep(!/menu default/, @lines);
+	# Drop blacklisted kernel parameters
+	@lines = map(scalar(s/ ($persist_remove)(?= )//g, $_), @lines);
+	return @lines;
 }
 
 sub handle_file {
 	my $file = shift;
-	my $is_efi = shift;
 
+	my @prefix;	# lines
+	my @stanzas;	# references to lists of lines
+
+	# Read file
 	open(FD, $file)
 		or die "Couldn't read $file";
 	my @data = <FD>;
 	close(FD);
 	chomp @data;
+	# Get prefix section
+	push @prefix, shift @data
+		while $data[0] !~ /^(label|title)\s/;
+	# Get stanzas
+	my $stanza = [];
+	for (@data, "label END") {
+		if (/^(label|title)\s/ && @$stanza) {
+			push @stanzas, $stanza;
+			$stanza = [];
+		}
+		push @$stanza, $_;
+	}
 
+	# Drop hidden-menu options
+	@prefix = grep !/menu hidden|hiddenmenu/, @prefix;
+	# Drop blacklisted stanzas
+	@stanzas = grep {!grep /Basic Video|Verify and Boot/, @$_} @stanzas;
+	# Drop blacklisted kernel parameters
+	@stanzas = map([map(scalar(s/ ($all_remove)(?= )//g, $_), @$_)],
+				@stanzas);
+	# Add persistent storage stanzas
+	@stanzas = map($_->[0] !~ /local/ ? ($_, [make_persist_stanza(@$_)])
+				: $_, @stanzas);
+
+	# Write file
 	open(FD, ">", $file)
 		or die "Couldn't write $file";
-	my $need_label = "";
-	my $drop_stanza = 0;
-	my @labelopts;
-	push @data, "label END";
-	for my $line (@data) {
-		$line =~ s/ ($all_remove)(?= )//g;
-		if ($line =~ /^(label|title)\s+(.*)$/) {
-			my $label = $2;
-			write_stanza(\*FD, $need_label, $is_efi, @labelopts)
-				unless $need_label eq "" or $drop_stanza;
-			if ($label ne "local") {
-				$need_label = "$label-persist";
-			} else {
-				$need_label = "";
-			}
-			# Drop "Verify and Boot" entries
-			$drop_stanza = ($label =~ /^(Verify and|check)/);
-			undef @labelopts;
-		} else {
-			push @labelopts, $line;
-		}
-
-		print FD "$line\n"
-			if $line !~ /menu hidden|hiddenmenu|label END/
-						and not $drop_stanza;
-	}
+	print FD "$_\n"
+		for (@prefix, map(@$_, @stanzas));
 	close(FD);
 }
 
-handle_file "$ENV{LIVE_ROOT}/isolinux/isolinux.cfg", 0;
-handle_file "$ENV{LIVE_ROOT}/EFI/boot/grub.conf", 1;
+handle_file "$ENV{LIVE_ROOT}/isolinux/isolinux.cfg";
+handle_file "$ENV{LIVE_ROOT}/EFI/boot/grub.conf";
 %end
 
 %post --nochroot
