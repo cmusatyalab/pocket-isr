@@ -396,6 +396,12 @@ lock-on-idle=false
 lock-after=false
 EOF
 
+# Allow ISR VMM drivers to request that root be allowed to access the FUSE
+# filesystem, in case the user wants to do that
+cat > /etc/fuse.conf <<EOF
+user_allow_other
+EOF
+
 # Record Pocket ISR version for pocket_isr_update
 echo "!!VERSION!!" > /etc/pocket-isr-release
 
