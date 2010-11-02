@@ -39,6 +39,10 @@ clean: need_root
 mrproper: clean
 	rm -rf $(CACHE)
 
+.PHONY: distribute
+distribute:
+	$(ISO_DIST) $(OUTDIR)/$(DESC).iso
+
 .PHONY: mount
 mount: need_root
 	mkdir mount_iso mount_squash mount_ext3

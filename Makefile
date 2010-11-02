@@ -76,3 +76,11 @@ clean:
 .PHONY: mrproper
 mrproper: clean
 	rm -f virtualbox/*.tar.bz2
+
+.PHONY: distribute-packages
+distribute-packages:
+	$(PACKAGE_DIST) $(FVER) $(OUTDIR)
+
+.PHONY: distribute-iso
+distribute-iso:
+	make -C iso distribute OUTDIR=$(abspath $(OUTDIR))
