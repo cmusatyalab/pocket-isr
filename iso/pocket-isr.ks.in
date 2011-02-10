@@ -382,6 +382,11 @@ Plugin {
 }
 EOF
 
+# Disable lxterminal transparency for newly-created accounts
+cat >> /usr/share/lxterminal/lxterminal.conf <<EOF
+bgalpha=65535
+EOF
+
 # Create empty, passwordless GNOME keyring for newly-created accounts.
 # This prevents the user from being prompted to set a keyring password when
 # they join a password-protected wireless network.
