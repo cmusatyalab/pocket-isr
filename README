@@ -69,11 +69,3 @@ tools/
 	Tools and startup scripts for Pocket ISR.
 	Built into the pocket-isr-tools package.
 	Released under the GPLv2.
-
-virtualbox/
-	RPM packaging for VirtualBox OSE.
-	VirtualBox itself is not included in the repository, but is fetched
-	at build time.  VirtualBox OSE is released under the GPLv2, with
-	some parts dual-licensed under the CDDL.
-	Built into the virtualbox-ose-3.0 package.
-	The packaging is released under the GPLv2.

@@ -4,10 +4,10 @@ OUTDIR = output
 -include local.mk
 
 # $1 = specfile
-# $2 = "Source0", "Patch3", etc. (omit for all sources and patches)
+# Returns all sources and patches
 getsources = $(shell awk '/Name:/ {name = $$2} \
 	/Version:/ {ver = $$2} \
-	/$(if $(2),$(2),(Source|Patch)[0-9]+):/ { \
+	/(Source|Patch)[0-9]+:/ { \
 		gsub("%{name}", name); \
 		gsub("%{version}", ver); \
 		print $$2 \
@@ -32,7 +32,7 @@ buildpackage = @sources=`mktemp -dt pocket-isr-sources-XXXXXXXX` && \
 
 .PHONY: all
 # Does not include "iso", since that needs root permissions to build
-all: artwork tools repo virtualbox createrepo
+all: artwork tools repo createrepo
 
 .PHONY: artwork
 artwork:
@@ -52,13 +52,6 @@ tools:
 repo:
 	$(call buildpackage,repo/*.spec)
 
-.PHONY: virtualbox
-virtualbox: VBOXURL := $(call getsources,virtualbox/*.spec,Source0)
-virtualbox: VBOXSRC := virtualbox/$(notdir $(VBOXURL))
-virtualbox:
-	[ -f $(VBOXSRC) ] || wget -O $(VBOXSRC) $(VBOXURL)
-	$(call buildpackage,virtualbox/*.spec)
-
 .PHONY: createrepo
 createrepo:
 	createrepo -qd $(OUTDIR)/SRPMS
@@ -72,10 +65,6 @@ iso:
 .PHONY: clean
 clean:
 	rm -rf $(OUTDIR)
-
-.PHONY: mrproper
-mrproper: clean
-	rm -f virtualbox/*.tar.bz2
 
 .PHONY: distribute-packages
 distribute-packages:
