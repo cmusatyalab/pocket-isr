@@ -212,6 +212,10 @@ EOF
 rpm -e --nodeps dkms gcc make
 yum remove -y glibc-devel glibc-headers kernel-devel kernel-headers cpp
 
+# Remove DKMS data directory (which includes a complete copy of the module
+# sources) to save space
+rm -rf /var/lib/dkms
+
 # Strip unneeded locales
 localedef --list-archive | grep -v en | xargs localedef --delete-from-archive
 mv /usr/lib/locale/locale-archive /usr/lib/locale/locale-archive.tmpl
