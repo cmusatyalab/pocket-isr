@@ -209,6 +209,18 @@ wget -O $INSTALL_ROOT/etc/yum.repos.d/virtualbox.repo \
 %post --erroronfail
 set -e
 
+# Ensure VirtualBox was correctly installed
+if [ ! -f /usr/bin/VirtualBox ] ; then
+	cat <<EOF
+
+VirtualBox does not appear to have been installed in the Pocket ISR image.
+This can occur if VirtualBox is running on the build host during installation.
+Bailing out.
+
+EOF
+	exit 1
+fi
+
 # create /etc/sysconfig/desktop (needed for installation)
 cat > /etc/sysconfig/desktop <<EOF
 PREFERRED=/usr/bin/startlxde

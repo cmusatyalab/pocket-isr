@@ -14,7 +14,7 @@ REPO := http://isr.cmu.edu/software/pocket-isr/repo/!!FVER!!/$$basearch/
 endif
 
 .PHONY: image
-image: need_root
+image: need_root need_no_virtualbox
 	@# Regenerate the kickstart file every time, since REPO might be
 	@# set differently by the caller
 	sed -e 's|!!REPO!!|$(REPO)|g' -e 's/!!FVER!!/$(FVER)/g' \
@@ -30,6 +30,13 @@ image: need_root
 .PHONY: need_root
 need_root:
 	@[ `id -u` = 0 ] || ( echo "You must be root." ; exit 1 )
+
+.PHONY: need_no_virtualbox
+need_no_virtualbox:
+	@# If VBoxSVC is running on the build host, VirtualBox will fail to
+	@# install properly in the chroot due to broken assumptions in its
+	@# preinst script.
+	@! pidof VBoxSVC || ( echo "VirtualBox must not be running." ; exit 1 )
 
 .PHONY: clean
 clean: need_root
