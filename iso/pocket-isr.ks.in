@@ -10,6 +10,7 @@ firewall --disabled
 selinux --disabled
 repo --name=openisr --baseurl=http://isr.cmu.edu/software/fedora/fc!!FVER!!/$basearch/
 repo --name=pocket-isr --baseurl=!!REPO!!
+repo --name=virtualbox --baseurl=http://download.virtualbox.org/virtualbox/rpm/fedora/!!FVER!!/$basearch
 
 %packages --instLangs C:en
 @lxde-desktop
@@ -28,6 +29,11 @@ qemu-system-x86
 lvm2
 # Needed to disable SELinux
 lokkit
+
+# Needed for VirtualBox module build
+gcc
+make
+dkms
 
 # make sure kpackagekit doesn't end up in the LXDE live images
 gnome-packagekit*
@@ -115,7 +121,7 @@ openisr-client
 pocket-isr-release
 pocket-isr-artwork
 pocket-isr-tools
-virtualbox-ose-3.2
+VirtualBox-4.0
 %end
 
 %post --nochroot --interpreter /usr/bin/perl
@@ -194,6 +200,10 @@ set -e
 
 # Copy the CHANGES file to the root of the CD image
 cp !!TOP_SRCDIR!!/CHANGES $LIVE_ROOT/CHANGES
+
+# Add VirtualBox repo file to the live image for completeness
+wget -O $INSTALL_ROOT/etc/yum.repos.d/virtualbox.repo \
+	http://download.virtualbox.org/virtualbox/rpm/fedora/virtualbox.repo
 %end
 
 %post --erroronfail
@@ -207,14 +217,20 @@ EOF
 
 # We needed DKMS and development packages to build the kernel modules.
 # This has already happened by now, so remove them again to save space.
-# virtualbox-ose depends on dkms, gcc, and make, so ignore dependencies when
-# removing those packages.  Remove *their* dependencies in the normal way.
-rpm -e --nodeps dkms gcc make
-yum remove -y glibc-devel glibc-headers kernel-devel kernel-headers cpp
+yum remove -y gcc make dkms glibc-devel glibc-headers kernel-devel \
+	kernel-headers cpp
 
 # Remove DKMS data directory (which includes a complete copy of the module
 # sources) to save space
 rm -rf /var/lib/dkms
+
+# Remove unneeded VirtualBox components to save space:
+# Guest additions
+rm -f /usr/share/virtualbox/VBoxGuestAdditions.iso
+# Localization, since --instLangs doesn't work for this package
+find /usr/share/virtualbox/nls -type f ! -name \*_en.qm -exec rm {} \;
+# Kernel module source
+rm -rf /usr/share/virtualbox/src
 
 # Strip unneeded locales
 localedef --list-archive | grep -v en | xargs localedef --delete-from-archive
@@ -478,6 +494,9 @@ if strstr "`cat /proc/cmdline`" live_ram ; then
 	# unmount and remount /mnt/live.
 	remount_live_volume
 fi
+
+# Disable VirtualBox update checking
+su - liveuser -c "VBoxManage setextradata global GUI/UpdateDate never"
 
 # Disable annoying VirtualBox information dialogs.  These are useful, once,
 # to educate the user, but in normal mode the "Don't show this message again"
