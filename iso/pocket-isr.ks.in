@@ -437,6 +437,17 @@ lock-on-idle=false
 lock-after=false
 EOF
 
+# Configure Midori default settings for newly-created accounts.
+# Set the default homepage to the ISR website and the search provider to
+# Google.
+mkdir -p /etc/skel/.config/midori
+cat > /etc/skel/.config/midori/config <<EOF
+[settings]
+homepage=http://isr.cmu.edu/
+last-web-search=1
+location-entry-search=http://www.google.com/search?q=%s
+EOF
+
 # Allow ISR VMM drivers to request that root be allowed to access the FUSE
 # filesystem, in case the user wants to do that
 cat > /etc/fuse.conf <<EOF
