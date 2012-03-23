@@ -1,5 +1,5 @@
 Name:		pocket-isr-release
-Version:	1
+Version:	2
 Release:	1
 Summary:	Pocket ISR repository configuration
 
@@ -34,5 +34,8 @@ rm -rf %{buildroot}
 %{_sysconfdir}/pki/rpm-gpg/RPM-GPG-KEY-pocket-isr
 
 %changelog
+* Thu Mar 22 2012 Benjamin Gilbert <bgilbert@cs.cmu.edu> - 2-1
+- Update GPG key expiration
+
 * Sun Jan 10 2010 Benjamin Gilbert <bgilbert@cs.cmu.edu> - 1-1
 - Initial release using OpenISR release-signing key
